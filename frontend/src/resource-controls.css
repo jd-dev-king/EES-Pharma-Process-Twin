@@ -1,0 +1,33 @@
+.resource-reassignment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.resource-reassignment-grid .route-request-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.resource-reassignment-grid .route-request-panel button {
+  margin-top: auto;
+}
+
+.resource-reassignment-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.approval-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+@media (max-width: 1050px) {
+  .resource-reassignment-grid {
+    grid-template-columns: 1fr;
+  }
+}

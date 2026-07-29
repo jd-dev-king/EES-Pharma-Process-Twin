@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Production Order",
+  "type": "object",
+  "required": ["po_number", "batch_number", "product_name", "quantity"],
+  "properties": {
+    "po_number": {"type": "string"},
+    "batch_number": {"type": "string"},
+    "product_name": {"type": "string"},
+    "quantity": {"type": "integer", "minimum": 1}
+  }
+}
