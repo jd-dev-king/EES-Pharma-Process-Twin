@@ -1,31 +1,69 @@
-# Python
-.venv/
-__pycache__/
-.pytest_cache/
-*.py[cod]
-*.db
-*.sqlite
-*.sqlite3
-
-# Node
-node_modules/
-dist/
-*.tsbuildinfo
-
-# Environment and credentials
+# Environment variables and credentials
 .env
 .env.*
 !.env.example
+!frontend/.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+secrets/
+credentials/
 
-# IDE / OS
-.DS_Store
-.vscode/
-.idea/
+# Python
+.venv/
+venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Media and temporary files
+# Databases and runtime state
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Node / frontend output
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Logs and generated exports
+*.log
+logs/
+exports/
+uploads/
+tmp/
+temp/
+
+# Archives and large local media
+*.zip
+*.tar
+*.gz
 *.mov
 *.mp4
-*.log
-coverage/
+
+# IDE / operating system
+.DS_Store
+__MACOSX/
+.vscode/
+.idea/
+*.swp
+
+# Hosting and local tooling
+.vercel/
+.railway/
+.cache/
+.npm/

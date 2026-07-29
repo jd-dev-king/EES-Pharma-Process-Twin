@@ -1,7 +1,45 @@
 import type * as T from "../types";
-const BASE=import.meta.env.VITE_API_BASE_URL?.replace(/\/$/,"")??"http://127.0.0.1:8000/api";
-export class ApiError extends Error{constructor(message:string,public readonly status:number){super(message)}}
-async function request<R>(path:string,init?:RequestInit):Promise<R>{const r=await fetch(`${BASE}${path}`,{...init,headers:{"Content-Type":"application/json",...init?.headers}});if(!r.ok){let m=`Request failed with status ${r.status}`;try{const b=await r.json() as {detail?:string};if(b.detail)m=b.detail}catch{}throw new ApiError(m,r.status)}return await r.json() as R}
+const configuredBase = (import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000")
+  .trim()
+  .replace(/\/$/, "");
+
+const BASE = configuredBase.endsWith("/api")
+  ? configuredBase
+  : `${configuredBase}/api`;
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+  }
+}
+
+async function request<R>(path: string, init: RequestInit = {}): Promise<R> {
+  const headers = new Headers(init.headers);
+
+  // Only add JSON content type when a request actually has a body.
+  // This avoids unnecessary browser preflight requests for simple GET calls.
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers,
+  });
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const body = (await response.json()) as { detail?: string };
+      if (body.detail) message = body.detail;
+    } catch {
+      // Preserve the HTTP status message when the body is not JSON.
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  return (await response.json()) as R;
+}
 export const api={
  health:()=>request<T.HealthResponse>("/health"),
  trainingRoles:async()=> (await request<{roles:string[]}>("/training/roles")).roles,

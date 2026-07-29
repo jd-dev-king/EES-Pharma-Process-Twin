@@ -34,8 +34,20 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Verify Railway API configuration
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then
+            echo "VITE_API_BASE_URL repository variable is missing"
+            exit 1
+          fi
+          echo "Railway API URL is configured for the production build"
+
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: npm run build
 
       - name: Configure GitHub Pages
