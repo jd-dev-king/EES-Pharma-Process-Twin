@@ -62,6 +62,11 @@ interface ProcessOverviewProps {
   orders: OverviewOrder[];
   assets: OverviewAsset[];
   events: OverviewEvent[];
+  parking: {
+    available: boolean; occupied_spaces: number; total_spaces: number; available_spaces: number;
+    employees: number; visitors: number; pending_reviews: number; denied_today: number;
+  } | null;
+  onOpenSecurity: () => void;
   onNavigate: (zone: OverviewZone | "thread" | "analytics" | "alerts") => void;
 }
 
@@ -93,7 +98,7 @@ function clamp(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
 
-function ProcessOverviewComponent({ connected, kpis, orders, assets, events, onNavigate }: ProcessOverviewProps) {
+function ProcessOverviewComponent({ connected, kpis, orders, assets, events, parking, onOpenSecurity, onNavigate }: ProcessOverviewProps) {
   const zoneState = useMemo(() => {
     const result = new Map<OverviewZone, VisualState>();
     for (const zone of flowZones) {
@@ -130,6 +135,7 @@ function ProcessOverviewComponent({ connected, kpis, orders, assets, events, onN
             <button className="button primary" onClick={() => onNavigate("thread")}>Open Digital Thread</button>
             <button className="button secondary" onClick={() => onNavigate("analytics")}>Executive Analytics</button>
             <button className="button secondary" onClick={() => onNavigate("automation")}>Automation Center</button>
+            <button className="button secondary" onClick={onOpenSecurity}>Security Command Center</button>
           </div>
         </div>
         <div className={`overview-plant-pulse ${connected ? "online" : "offline"}`}>
@@ -254,6 +260,16 @@ function ProcessOverviewComponent({ connected, kpis, orders, assets, events, onN
           </div>
         </section>
       </div>
+
+      <section className={`overview-security-strip ${parking?.available ? "online" : "offline"}`}>
+        <div><p className="eyebrow">Facility Security</p><h2>Security Command Center</h2><small>Pharma employee parking & access oversight</small></div>
+        <article><span>Parking</span><strong>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces}` : "OFFLINE"}</strong><small>{parking?.available ? `${parking.available_spaces} free` : "Independent twin unavailable"}</small></article>
+        <article><span>Employees</span><strong>{parking?.employees ?? 0}</strong><small>Currently on site</small></article>
+        <article><span>Visitors</span><strong>{parking?.visitors ?? 0}</strong><small>Currently on site</small></article>
+        <article><span>Pending Reviews</span><strong>{parking?.pending_reviews ?? 0}</strong><small>Security action required</small></article>
+        <article><span>Denied Today</span><strong>{parking?.denied_today ?? 0}</strong><small>Access exceptions</small></article>
+        <button className="button primary" onClick={onOpenSecurity}>Open Security Command Center</button>
+      </section>
 
       <section className="overview-automation-strip" onClick={() => onNavigate("automation")}>
         <div><p className="eyebrow">Mini Automation Status</p><h2>PLC Network</h2></div>

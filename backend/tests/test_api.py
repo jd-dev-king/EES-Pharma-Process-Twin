@@ -7,20 +7,30 @@ def test_training_session_starts_at_zero(client):
 def test_po_workspace_compares_inventory(client):
  assert register(client).status_code==201
  w=client.get("/api/office/production-orders/PO-260742/workspace"); assert w.status_code==200
- data=w.json(); assert len(data["comparison"])==4; assert any(x["status"]=="Blocked" for x in data["comparison"]); assert data["ready_for_release"] is False
+ data=w.json(); assert len(data["comparison"])==4; assert all(x["status"]=="Ready" for x in data["comparison"]); assert data["ready_for_release"] is True
 def test_substitution_requires_office_approval(client):
  register(client)
  req=client.post("/api/warehouse/substitutions",json={"po_number":"PO-260742","material_code":"FLAVOR-CH","proposed_lot":"FLV-260615","reason":"Scheduled lot is on QA hold"}); assert req.status_code==201
  rid=req.json()["request_id"]
  decision=client.post(f"/api/office/substitutions/{rid}/decision",json={"approved":True,"decision_note":"Approved released alternate"}); assert decision.status_code==200 and decision.json()["status"]=="Approved"
-def test_warehouse_full_execution_after_approval(client):
+def test_warehouse_full_execution_for_stocked_flavor(client):
  register(client); to="TO-PO-260742"
  assert client.post(f"/api/warehouse/queue/{to}/accept",json={"operator":"J. Operator"}).status_code==200
- blocked=client.post(f"/api/warehouse/queue/{to}/pick",json={"operator":"J. Operator"}); assert blocked.status_code==409
- req=client.post("/api/warehouse/substitutions",json={"po_number":"PO-260742","material_code":"FLAVOR-CH","proposed_lot":"FLV-260615","reason":"Use released alternate"}).json()
- client.post(f"/api/office/substitutions/{req['request_id']}/decision",json={"approved":True,"decision_note":"Approved"})
- picked=client.post(f"/api/warehouse/queue/{to}/pick",json={"operator":"J. Operator"}); assert picked.json()["status"]=="Picked" and picked.json()["progress"]==100
+ picked=client.post(f"/api/warehouse/queue/{to}/pick",json={"operator":"J. Operator"}); assert picked.status_code==200 and picked.json()["status"]=="Picked" and picked.json()["progress"]==100
  delivered=client.post(f"/api/warehouse/queue/{to}/deliver",json={"operator":"J. Operator"}); assert delivered.json()["status"]=="Delivered"
+
+def test_berry_flavor_intentionally_demonstrates_shortage(client):
+ payload={"po_number":"PO-BERRY","batch_number":"B-BERRY","product_name":"Prednisone Oral Suspension","quantity":100,"priority":"Normal","destination":"Weighing Staging 01","flavor":"Berry"}
+ assert client.post("/api/office/register-po",json=payload).status_code==201
+ data=client.get("/api/office/production-orders/PO-BERRY/workspace").json()
+ berry=next(x for x in data["comparison"] if x["material_code"]=="FLAVOR-BE")
+ assert berry["status"]=="Shortage" and data["ready_for_release"] is False
+
+def test_unflavored_batch_omits_flavor_material(client):
+ payload={"po_number":"PO-PLAIN","batch_number":"B-PLAIN","product_name":"Prednisone Oral Suspension","quantity":100,"priority":"Normal","destination":"Weighing Staging 01","flavor":"Unflavored"}
+ assert client.post("/api/office/register-po",json=payload).status_code==201
+ data=client.get("/api/office/production-orders/PO-PLAIN/workspace").json()
+ assert all(not x["material_code"].startswith("FLAVOR-") for x in data["comparison"])
 def test_priority_queue_sorting(client):
  register(client,"PO-NORMAL"); client.post("/api/office/register-po",json={"po_number":"PO-CRIT","batch_number":"B-CRIT","product_name":"Product","quantity":10,"priority":"Critical","destination":"Stage"})
  q=client.get("/api/warehouse/queue").json(); assert q[0]["priority"]=="Critical"

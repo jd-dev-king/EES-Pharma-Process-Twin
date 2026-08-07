@@ -1,9 +1,11 @@
 import os
+import re
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.api.routes import router
 from app.core.config import get_settings
@@ -15,6 +17,40 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+
+    # Lightweight compatibility migrations for existing local/demo databases.
+    # create_all() creates missing tables but does not add columns to existing tables.
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+
+        production_order_columns = {
+            column["name"]
+            for column in inspector.get_columns("production_orders")
+        }
+
+        if "bulk_material" not in production_order_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE production_orders "
+                    "ADD COLUMN bulk_material VARCHAR(80) "
+                    "NOT NULL DEFAULT 'Propylene Glycol'"
+                )
+            )
+
+        mix_batch_columns = {
+            column["name"]
+            for column in inspector.get_columns("mix_batches")
+        }
+
+        if "bulk_material" not in mix_batch_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE mix_batches "
+                    "ADD COLUMN bulk_material VARCHAR(80) "
+                    "NOT NULL DEFAULT 'Propylene Glycol'"
+                )
+            )
+
     yield
 
 
@@ -25,8 +61,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+def normalize_origin(origin: str) -> str:
+    origin = origin.strip()
+    match = re.fullmatch(r"\[(https?://[^\]]+)\]\(https?://[^)]+\)", origin)
+    return match.group(1) if match else origin
+
 allowed_origins = [
-    origin.strip()
+    normalize_origin(origin)
     for origin in os.getenv(
         "ALLOWED_ORIGINS",
         (
@@ -39,7 +80,7 @@ allowed_origins = [
             "https://www.portfolio.jeremiahlupton.com"
         ),
     ).split(",")
-    if origin.strip()
+    if normalize_origin(origin)
 ]
 
 app.add_middleware(

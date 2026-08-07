@@ -1,5 +1,5 @@
 export interface HealthResponse{status:string;app:string;version:string;database:string}
-export interface ProductionOrder{id:number;po_number:string;batch_number:string;product_name:string;quantity:number;status:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean;created_at:string}
+export interface ProductionOrder{id:number;po_number:string;batch_number:string;product_name:string;quantity:number;status:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean;bulk_material:string;created_at:string}
 export interface MaterialComparison{material_code:string;material_name:string;required_quantity:number;unit:string;available_quantity:number;released_quantity:number;status:string;recommended_lot:string|null;warning:string|null}
 export interface MaterialRequirement{id:number;po_number:string;material_code:string;material_name:string;required_quantity:number;unit:string;assigned_lot:string|null;status:string}
 export interface ProductionOrderWorkspace{production_order:ProductionOrder;requirements:MaterialRequirement[];comparison:MaterialComparison[];ready_for_release:boolean}
@@ -7,7 +7,7 @@ export interface InventoryLot{id:number;material_code:string;material_name:strin
 export interface WarehouseTransferOrder{id:number;to_number:string;po_number:string;priority:string;destination:string;status:string;owner:string;progress:number;blocker:string|null;created_at:string}
 export interface SubstitutionRequest{id:number;request_id:string;po_number:string;material_code:string;current_lot:string|null;proposed_lot:string;reason:string;status:string;decision_note:string|null;created_at:string}
 export interface TrainingSession{id:number;session_id:string;role:string;difficulty:string;status:string;score:number;created_at:string}
-export interface ProductionOrderPayload{po_number:string;batch_number:string;product_name:string;quantity:number;priority:string;destination:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean}
+export interface ProductionOrderPayload{po_number:string;batch_number:string;product_name:string;quantity:number;priority:string;destination:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean;flavor:string;bulk_material:string}
 export interface PlatformEvent{id:number;event_type:string;source:string;entity_type:string;entity_id:string;message:string;severity:string;created_at:string}
 export interface NotificationRecord{id:number;recipient:string;title:string;message:string;severity:string;is_read:boolean;created_at:string}
 export interface SchedulerConflictPayload{weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string}
@@ -50,3 +50,41 @@ export interface EBRBatchDetail{summary:EBRBatchSummary;timeline:PlatformEvent[]
 export interface BulkTank{id:number;tank_code:string;material_code:string;material_name:string;capacity_kg:number;quantity_kg:number;qa_status:string;lot_number:string|null;temperature_c:number;status:string}
 export interface BulkDelivery{id:number;delivery_id:string;material_code:string;material_name:string;vendor:string;carrier:string;quantity_kg:number;receiving_bay:string;tank_code:string;delivery_window:string;lot_number:string;coa_number:string;seal_number:string;temperature_c:number;status:string;inspection_verified:boolean;unload_progress:number;sample_id:string|null;qa_disposition:string|null;created_at:string}
 export interface BulkTransfer{id:number;transfer_id:string;po_number:string;source_tank:string;destination_tank:string;material_code:string;quantity_kg:number;operator:string;identity_verified:boolean;qa_release_verified:boolean;hose_connected:boolean;status:string;progress:number;fault_code:string|null;fault_message:string|null;fault_diagnosed:boolean;created_at:string;completed_at:string|null}
+
+
+export interface ParkingStatus {
+  available: boolean;
+  lot_code: string;
+  lot_name: string;
+  total_spaces: number;
+  occupied_spaces: number;
+  available_spaces: number;
+  employees: number;
+  visitors: number;
+  occupancy_percent: number;
+}
+export interface SecurityOccupant {
+  vehicle_identifier: string;
+  occupant_type: string;
+  identity: string;
+  space_number: string;
+  entry_time: string;
+}
+export interface SecurityEvent {
+  event_id: number;
+  event_time: string;
+  gate_id: string;
+  vehicle_identifier: string | null;
+  event_type: string;
+  access_result: string;
+  reason: string | null;
+}
+export interface SecurityStatus extends ParkingStatus {
+  pending_reviews: number;
+  approved_today: number;
+  denied_today: number;
+  visitor_ids_available: number;
+  active_occupants: SecurityOccupant[];
+  recent_events: SecurityEvent[];
+}
+

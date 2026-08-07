@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from random import random
 from uuid import uuid4
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.core.database import Base
@@ -19,32 +19,166 @@ def record_event(db, **kw):
 def create_notification(db, **kw):
     item=Notification(**kw); db.add(item); return item
 
+def facility_parking_status(db: Session):
+    """Read the shared Pharma employee parking state from ees_data_platform.
+
+    Parking is a separate digital twin, so this function is deliberately read-only.
+    It returns an offline/unavailable payload when the parking schema has not yet
+    been installed instead of taking the Pharma Process Twin offline.
+    """
+    try:
+        summary = db.execute(text("""
+            SELECT
+                COUNT(*) FILTER (WHERE ps.session_status = 'ACTIVE') AS occupied,
+                COUNT(*) FILTER (WHERE ps.session_status = 'ACTIVE' AND ps.occupant_type = 'EMPLOYEE') AS employees,
+                COUNT(*) FILTER (WHERE ps.session_status = 'ACTIVE' AND ps.occupant_type = 'VISITOR') AS visitors
+            FROM parking_access.parking_sessions ps
+        """)).mappings().one()
+        total = db.execute(text("SELECT COUNT(*) FROM parking_access.parking_spaces")).scalar_one()
+        occupied = int(summary['occupied'] or 0)
+        total = int(total or 0)
+        return {
+            "available": True,
+            "lot_code": "PHARMA-EMPLOYEE",
+            "lot_name": "Pharma Employee Parking",
+            "total_spaces": total,
+            "occupied_spaces": occupied,
+            "available_spaces": max(0, total - occupied),
+            "employees": int(summary['employees'] or 0),
+            "visitors": int(summary['visitors'] or 0),
+            "occupancy_percent": round((occupied / total * 100) if total else 0, 1),
+        }
+    except Exception:
+        db.rollback()
+        return {
+            "available": False,
+            "lot_code": "PHARMA-EMPLOYEE",
+            "lot_name": "Pharma Employee Parking",
+            "total_spaces": 70,
+            "occupied_spaces": 0,
+            "available_spaces": 70,
+            "employees": 0,
+            "visitors": 0,
+            "occupancy_percent": 0.0,
+        }
+
+
+def facility_security_status(db: Session):
+    """Read-only Security Command Center view over parking_access.*."""
+    parking = facility_parking_status(db)
+    if not parking.get("available"):
+        return {
+            **parking,
+            "pending_reviews": 0,
+            "approved_today": 0,
+            "denied_today": 0,
+            "visitor_ids_available": 0,
+            "active_occupants": [],
+            "recent_events": [],
+        }
+    try:
+        counts = db.execute(text("""
+            SELECT
+              COUNT(*) FILTER (WHERE status='PENDING') AS pending_reviews,
+              COUNT(*) FILTER (WHERE status='APPROVED' AND decided_at::date = CURRENT_DATE) AS approved_today,
+              COUNT(*) FILTER (WHERE status='DENIED' AND decided_at::date = CURRENT_DATE) AS denied_today
+            FROM parking_access.security_requests
+        """)).mappings().one()
+        visitor_ids_available = int(db.execute(text(
+            "SELECT COUNT(*) FROM parking_access.visitor_passes WHERE status='AVAILABLE'"
+        )).scalar_one() or 0)
+        occupants = [dict(row) for row in db.execute(text("""
+            SELECT
+              ps.vehicle_identifier,
+              ps.occupant_type,
+              COALESCE(e.display_name, vp.visitor_code, ps.vehicle_identifier) AS identity,
+              sp.space_number,
+              ps.entry_time
+            FROM parking_access.parking_sessions ps
+            JOIN parking_access.parking_spaces sp ON sp.space_id = ps.space_id
+            LEFT JOIN parking_access.employee_vehicles ev ON ev.vehicle_id = ps.employee_vehicle_id
+            LEFT JOIN parking_access.employees e ON e.employee_id = ev.employee_id
+            LEFT JOIN parking_access.visitor_passes vp ON vp.visitor_pass_id = ps.visitor_pass_id
+            WHERE ps.session_status='ACTIVE'
+            ORDER BY ps.entry_time DESC
+            LIMIT 50
+        """)).mappings().all()]
+        recent_events = [dict(row) for row in db.execute(text("""
+            SELECT event_id, event_time, gate_id, vehicle_identifier, event_type, access_result, reason
+            FROM parking_access.access_events
+            ORDER BY event_time DESC
+            LIMIT 12
+        """)).mappings().all()]
+        return {
+            **parking,
+            "pending_reviews": int(counts["pending_reviews"] or 0),
+            "approved_today": int(counts["approved_today"] or 0),
+            "denied_today": int(counts["denied_today"] or 0),
+            "visitor_ids_available": visitor_ids_available,
+            "active_occupants": occupants,
+            "recent_events": recent_events,
+        }
+    except Exception:
+        db.rollback()
+        return {
+            **parking,
+            "pending_reviews": 0,
+            "approved_today": 0,
+            "denied_today": 0,
+            "visitor_ids_available": 0,
+            "active_occupants": [],
+            "recent_events": [],
+        }
+
 def ensure_inventory(db: Session):
     if db.scalar(select(InventoryLot.id).limit(1)): return
     lots=[
       InventoryLot(material_code="API-PRED",material_name="Prednisone API",lot_number="API-260701",quantity=85,reserved_quantity=0,unit="kg",location="A-01-01",qa_status="Released",expiration_date="2027-06-30"),
       InventoryLot(material_code="SORB-70",material_name="Sorbitol Solution 70%",lot_number="SOR-260710",quantity=900,reserved_quantity=0,unit="kg",location="BULK-02",qa_status="Released",expiration_date="2027-02-15"),
-      InventoryLot(material_code="FLAVOR-CH",material_name="Cherry Flavor System",lot_number="FLV-260706",quantity=12,reserved_quantity=0,unit="kg",location="B-03-04",qa_status="QA Hold",expiration_date="2027-01-20"),
-      InventoryLot(material_code="FLAVOR-CH",material_name="Cherry Flavor System",lot_number="FLV-260615",quantity=18,reserved_quantity=0,unit="kg",location="B-03-02",qa_status="Released",expiration_date="2026-12-30"),
+      InventoryLot(material_code="FLAVOR-CH",material_name="Cherry Flavor System",lot_number="FLV-260615",quantity=30,reserved_quantity=0,unit="kg",location="B-03-02",qa_status="Released",expiration_date="2026-12-30"),
+      InventoryLot(material_code="FLAVOR-OR",material_name="Orange Flavor System",lot_number="FLV-OR-260701",quantity=30,reserved_quantity=0,unit="kg",location="B-03-03",qa_status="Released",expiration_date="2027-01-15"),
+      InventoryLot(material_code="FLAVOR-LE",material_name="Lemon Flavor System",lot_number="FLV-LE-260704",quantity=24,reserved_quantity=0,unit="kg",location="B-03-05",qa_status="Released",expiration_date="2027-02-01"),
+      InventoryLot(material_code="FLAVOR-BE",material_name="Berry Flavor System",lot_number="FLV-BE-260705",quantity=3,reserved_quantity=0,unit="kg",location="B-03-06",qa_status="Released",expiration_date="2027-02-10"),
       InventoryLot(material_code="BOTTLE-120",material_name="120 mL Amber Bottle",lot_number="BOT-260720",quantity=8000,reserved_quantity=0,unit="ea",location="PKG-A-06",qa_status="Released",expiration_date="2030-01-01"),
     ]
     db.add_all(lots); db.commit()
 
+BULK_RECIPES = {
+    "Propylene Glycol": {"tank_code": "PG-101", "material_code": "PG", "quantity_kg": 420.0},
+    "Glycerin": {"tank_code": "GLY-101", "material_code": "GLY", "quantity_kg": 400.0},
+    "Sorbitol Solution": {"tank_code": "SOR-101", "material_code": "SOR", "quantity_kg": 450.0},
+}
+
+FLAVOR_MATERIALS = {
+    "Cherry": ("FLAVOR-CH", "Cherry Flavor System"),
+    "Orange": ("FLAVOR-OR", "Orange Flavor System"),
+    "Lemon": ("FLAVOR-LE", "Lemon Flavor System"),
+    "Berry": ("FLAVOR-BE", "Berry Flavor System"),
+}
+
 def default_materials(payload):
-    return payload.materials or [
+    if payload.materials:
+        return payload.materials
+    materials = [
       type("M",(),dict(material_code="API-PRED",material_name="Prednisone API",required_quantity=4.2,unit="kg"))(),
-      type("M",(),dict(material_code="SORB-70",material_name="Sorbitol Solution 70%",required_quantity=210.0,unit="kg"))(),
-      type("M",(),dict(material_code="FLAVOR-CH",material_name="Cherry Flavor System",required_quantity=6.0,unit="kg"))(),
-      type("M",(),dict(material_code="BOTTLE-120",material_name="120 mL Amber Bottle",required_quantity=float(payload.quantity),unit="ea"))(),
     ]
+    flavor = (payload.flavor or "Cherry").strip().title()
+    if flavor != "Unflavored":
+        code, name = FLAVOR_MATERIALS.get(flavor, FLAVOR_MATERIALS["Cherry"])
+        materials.append(type("M",(),dict(material_code=code,material_name=name,required_quantity=6.0,unit="kg"))())
+    materials.append(type("M",(),dict(material_code="BOTTLE-120",material_name="120 mL Amber Bottle",required_quantity=float(payload.quantity),unit="ea"))())
+    return materials
 
 def create_production_order(db: Session,payload: ProductionOrderCreate):
     ensure_inventory(db)
-    po=ProductionOrder(po_number=payload.po_number,batch_number=payload.batch_number,product_name=payload.product_name,quantity=payload.quantity,status="Material Review",weigh_room=payload.weigh_room,mix_tank=payload.mix_tank,hold_tank=payload.hold_tank,packaging_line=payload.packaging_line,requires_premix=payload.requires_premix)
+    bulk_material = (payload.bulk_material or "Propylene Glycol").strip().title()
+    if bulk_material not in BULK_RECIPES:
+        raise ValueError("Bulk material must be Propylene Glycol, Glycerin, or Sorbitol Solution")
+    po=ProductionOrder(po_number=payload.po_number,batch_number=payload.batch_number,product_name=payload.product_name,quantity=payload.quantity,status="Material Review",weigh_room=payload.weigh_room,mix_tank=payload.mix_tank,hold_tank=payload.hold_tank,packaging_line=payload.packaging_line,requires_premix=payload.requires_premix,bulk_material=bulk_material)
     to=WarehouseTransferOrder(to_number=f"TO-{payload.po_number}",po_number=payload.po_number,priority=payload.priority,destination=payload.destination,status="Pending",owner="Warehouse Queue")
-    reqs=[MaterialRequirement(po_number=payload.po_number,material_code=m.material_code,material_name=m.material_name,required_quantity=m.required_quantity,unit=m.unit,assigned_lot=("FLV-260706" if m.material_code=="FLAVOR-CH" else None),status=("Scheduled Lot" if m.material_code=="FLAVOR-CH" else "Pending Allocation")) for m in default_materials(payload)]
+    reqs=[MaterialRequirement(po_number=payload.po_number,material_code=m.material_code,material_name=m.material_name,required_quantity=m.required_quantity,unit=m.unit,assigned_lot=None,status="Pending Allocation") for m in default_materials(payload)]
     db.add_all([po,to,*reqs])
-    record_event(db,event_type="ProductionOrderRegistered",source="Office",entity_type="ProductionOrder",entity_id=payload.po_number,message=f"{payload.po_number} registered for material review.",severity="info")
+    record_event(db,event_type="ProductionOrderRegistered",source="Office",entity_type="ProductionOrder",entity_id=payload.po_number,message=f"{payload.po_number} registered for material review · flavor {payload.flavor} · bulk excipient {bulk_material} · purified water fixed recipe bulk.",severity="info")
     create_notification(db,recipient="Warehouse",title="New transfer order",message=f"{to.to_number} entered the priority queue.",severity="warning" if payload.priority in {"Critical","High"} else "info")
     try: db.commit()
     except IntegrityError as exc: db.rollback(); raise ValueError("PO number, batch number, or transfer order already exists") from exc
@@ -123,12 +257,25 @@ def warehouse_action(db,to_number,action,operator):
       if is_finished_goods:
         po=db.scalar(select(ProductionOrder).where(ProductionOrder.po_number==to.po_number))
         run=db.scalar(select(PackagingRun).where(PackagingRun.po_number==to.po_number))
-        completed=run.bottles_completed if run else 0
+        gross=run.bottles_completed if run else 0
+        rejects=run.rejects if run else 0
+        completed=max(0,gross-rejects)
         planned=po.quantity if po else 0
         if completed < planned:
           shortage=round(planned-completed)
-          create_notification(db,recipient="Office",title="Finished-goods lot short",message=f"{to.po_number} released with {completed} of {planned} units; short by {shortage} units. Outbound pickup may proceed.",severity="warning")
-          record_event(db,event_type="FGShortLotNotice",source="Warehouse",entity_type="WarehouseTransferOrder",entity_id=to.to_number,message=f"Released FG lot short by {shortage} units; outbound pickup continued.",severity="warning")
+          approved=db.scalar(select(RouteChangeRequest).where(
+              RouteChangeRequest.po_number==to.po_number,
+              RouteChangeRequest.resource_type=="finished_goods_quantity",
+              RouteChangeRequest.requested_resource==str(completed),
+              RouteChangeRequest.status=="Approved",
+          ))
+          if not approved:
+            to.status="Blocked"
+            to.blocker=f"FG reconciliation required: {completed} good bottles of {planned} planned; exact shortfall {shortage}. Office approval required before pickup."
+            create_notification(db,recipient="Office",title="Finished-goods reconciliation required",message=f"{to.po_number}: {completed} good bottles, {rejects} rejects, exact shortfall {shortage}.",severity="warning")
+            record_event(db,event_type="FGReconciliationRequired",source="Warehouse",entity_type="WarehouseTransferOrder",entity_id=to.to_number,message=to.blocker,severity="warning")
+            db.commit()
+            raise ValueError(to.blocker)
     elif action=="deliver":
       if to.status!="Picked": raise ValueError("Order must be fully picked before delivery")
       is_finished_goods = to.to_number.startswith("TO-FG-")
@@ -458,8 +605,10 @@ def tick_mix_batch(db: Session, batch_id: str):
     if batch.phase=="Bulk Water Addition":
         batch.progress=min(100,batch.progress+20); batch.level_percent=min(45,batch.level_percent+9); batch.mass_kg+=90; batch.temperature_c=min(25,batch.temperature_c+0.4)
         if batch.progress>=100:
-            batch.phase="Bulk PG Verification"; batch.progress=0; batch.status="Awaiting Bulk PG"
-            record_event(db,event_type="BulkPGRequired",source="Mixing",entity_type="MixBatch",entity_id=batch.batch_id,message="Bulk water addition complete; verify and charge released Propylene Glycol before manual additions.",severity="info")
+            po=db.scalar(select(ProductionOrder).where(ProductionOrder.po_number==batch.po_number))
+            bulk_material=po.bulk_material if po else "Propylene Glycol"
+            batch.phase="Bulk Excipient Verification"; batch.progress=0; batch.status="Awaiting Bulk Excipient"
+            record_event(db,event_type="BulkExcipientRequired",source="Mixing",entity_type="MixBatch",entity_id=batch.batch_id,message=f"Bulk water addition complete; verify and charge released {bulk_material} before manual additions.",severity="info")
     elif batch.phase=="Final Agitation":
         batch.rpm=65; batch.progress=min(100,batch.progress+20); batch.temperature_c=min(28,batch.temperature_c+0.3)
         if batch.progress>=100:
@@ -487,25 +636,27 @@ def tick_mix_batch(db: Session, batch_id: str):
 
 def confirm_bulk_pg_addition(db: Session, batch_id: str, operator: str):
     batch = get_mix_batch(db, batch_id)
-    if batch.phase != "Bulk PG Confirmation":
-        raise ValueError("Bulk PG charge is not awaiting operator confirmation")
+    if batch.phase not in {"Bulk Excipient Confirmation", "Bulk PG Confirmation"}:
+        raise ValueError("Bulk excipient charge is not awaiting operator confirmation")
     transfer = db.scalar(
         select(BulkTransfer)
         .where(BulkTransfer.po_number == batch.po_number, BulkTransfer.status == "Complete")
         .order_by(BulkTransfer.id.desc())
     )
     if not transfer:
-        raise ValueError("Complete the automatic PG transfer before confirmation")
+        raise ValueError("Complete the automatic bulk excipient transfer before confirmation")
     batch.phase = "Manual Additions"
     batch.status = "Running"
     batch.progress = 100
+    po = db.scalar(select(ProductionOrder).where(ProductionOrder.po_number == batch.po_number))
+    bulk_material = po.bulk_material if po else transfer.material_code
     record_event(
         db,
-        event_type="BulkPGConfirmed",
+        event_type="BulkExcipientConfirmed",
         source="Mixing",
         entity_type="MixBatch",
         entity_id=batch.batch_id,
-        message=f"{transfer.quantity_kg:.0f} kg Propylene Glycol from {transfer.source_tank} confirmed by {operator}.",
+        message=f"{transfer.quantity_kg:.0f} kg {bulk_material} from {transfer.source_tank} confirmed by {operator}.",
         severity="info",
     )
     db.commit(); db.refresh(batch); return batch
@@ -685,6 +836,7 @@ def _resource_value(po: ProductionOrder, resource_type: str) -> str:
         "hold_tank": "hold_tank",
         "packaging_line": "packaging_line",
         "production_quantity": "quantity",
+        "finished_goods_quantity": "quantity",
     }
     attr = mapping.get(resource_type)
     if not attr:
@@ -717,7 +869,7 @@ def _validate_requested_resource(db: Session, resource_type: str, requested_reso
     elif resource_type == "packaging_line":
         if requested_resource not in {"PKG-01", "PKG-02"}:
             raise ValueError("Requested packaging line does not exist")
-    elif resource_type == "production_quantity":
+    elif resource_type in {"production_quantity", "finished_goods_quantity"}:
         try:
             quantity = int(requested_resource)
         except (TypeError, ValueError) as exc:
@@ -799,6 +951,7 @@ def decide_route_change(db: Session, request_id: str, approved: bool):
             "weigh_room": "weigh_room",
             "packaging_line": "packaging_line",
             "production_quantity": "quantity",
+            "finished_goods_quantity": "quantity",
         }.get(item.resource_type)
         if not attr:
             raise ValueError("Unsupported resource type")
@@ -822,6 +975,19 @@ def decide_route_change(db: Session, request_id: str, approved: bool):
             )
             if transfer:
                 transfer.status = "Accepted" if transfer.owner != "Warehouse Queue" else "Pending"
+                transfer.blocker = None
+                transfer.progress = 0
+        elif item.resource_type == "finished_goods_quantity":
+            # Late-stage FG reconciliation acknowledges the exact good-unit count
+            # without rewriting the original production-order target.
+            transfer = db.scalar(
+                select(WarehouseTransferOrder).where(
+                    WarehouseTransferOrder.po_number == item.po_number,
+                    WarehouseTransferOrder.to_number == f"TO-FG-{item.po_number}",
+                )
+            )
+            if transfer and transfer.status == "Blocked":
+                transfer.status = "Accepted"
                 transfer.blocker = None
                 transfer.progress = 0
         else:
@@ -965,7 +1131,7 @@ def packaging_action(db: Session, run_id: str, action: str, operator: str):
             create_notification(db,recipient="Maintenance",title=f"Packaging {category}",message=f"{run.line_code} fault {code} on {run.po_number}; {wo.work_order_id} opened.",severity="warning")
             record_event(db,event_type="PackagingDowntimeStarted",source="Packaging",entity_type="PackagingRun",entity_id=run.run_id,message=f"{code} stopped {run.line_code}; maintenance work order {wo.work_order_id} created.",severity="warning")
         else:
-            run.progress=min(100,run.progress+20); run.bottles_completed=round(po.quantity*run.progress/100); run.cases_staged=run.bottles_completed//24; run.rejects=max(run.rejects,round(run.bottles_completed*0.004));
+            run.progress=min(100,run.progress+20); run.bottles_completed=round(po.quantity*run.progress/100); run.rejects=max(run.rejects,round(run.bottles_completed*0.004)); run.cases_staged=max(0,(run.bottles_completed-run.rejects)//24);
             if run.progress>=100:
                 run.status="Awaiting FG Sample"; run.speed_bpm=0; line.status="Product Hold"; po.status="FG Sample Required"
                 hold=db.scalar(select(HoldTank).where(HoldTank.tank_code==run.hold_tank))
@@ -991,7 +1157,7 @@ def packaging_action(db: Session, run_id: str, action: str, operator: str):
     elif action=="collect-sample":
         if run.status!="Awaiting FG Sample": raise ValueError("Complete packaging before collecting the FG sample")
         sample=f"FG-{po.batch_number}-{run.line_code}"; run.fg_sample_id=sample; run.status="FG QA Hold"; line.status="Product Hold"; po.status="FG QA Hold"
-        task=QAFinishedGoodsTask(task_id=f"QAFG-{uuid4().hex[:8].upper()}",po_number=po.po_number,batch_number=po.batch_number,product_name=po.product_name,packaging_line=run.line_code,sample_id=sample,quantity=po.quantity,status="Pending Review")
+        task=QAFinishedGoodsTask(task_id=f"QAFG-{uuid4().hex[:8].upper()}",po_number=po.po_number,batch_number=po.batch_number,product_name=po.product_name,packaging_line=run.line_code,sample_id=sample,quantity=max(0,run.bottles_completed-run.rejects),status="Pending Review")
         db.add(task); create_notification(db,recipient="Quality",title="FG disposition required",message=f"{po.po_number} sample {sample} is ready for review.",severity="warning")
     else: raise ValueError("Unknown packaging action")
     record_event(db,event_type=f"Packaging{action.title().replace('-','')}",source="Packaging",entity_type="PackagingRun",entity_id=run.run_id,message=f"{operator} completed {action} for {run.run_id}.",severity="warning" if run.status=="Faulted" else "info")
@@ -1153,7 +1319,7 @@ def ebr_batch_summaries(db: Session, search: str=""):
         run=db.scalar(select(PackagingRun).where(PackagingRun.po_number==po.po_number).order_by(PackagingRun.id.desc()))
         shipment=db.scalar(select(Shipment).where(Shipment.po_number==po.po_number).order_by(Shipment.id.desc()))
         review=_review_for_po(db,po.po_number)
-        produced=run.bottles_completed if run else 0
+        produced=max(0,run.bottles_completed-run.rejects) if run else 0
         yield_pct=round((produced/max(1,po.quantity))*100,2) if run else 0.0
         result.append({"po_number":po.po_number,"batch_number":po.batch_number,"product_name":po.product_name,"status":po.status,"quantity":po.quantity,"yield_percent":yield_pct,"rejects":run.rejects if run else 0,"downtime_minutes":run.downtime_minutes if run else 0.0,"exception_count":len(_batch_exceptions(db,po.po_number)),"review_status":review.status if review else "Not Started","shipment_status":shipment.status if shipment else "Not Scheduled","created_at":po.created_at})
     return result
@@ -1288,8 +1454,11 @@ def create_bulk_transfer(db,payload):
     if tank.qa_status!="Released": raise ValueError("Bulk tank is not QA released")
     if tank.quantity_kg<payload.quantity_kg: raise ValueError("Insufficient released bulk inventory")
     batch=db.scalar(select(MixBatch).where(MixBatch.po_number==payload.po_number).order_by(MixBatch.id.desc()))
-    if not batch or batch.phase != "Bulk PG Verification":
-        raise ValueError("Complete bulk water addition before creating the PG production charge")
+    if not batch or batch.phase not in {"Bulk Excipient Verification", "Bulk PG Verification"}:
+        raise ValueError("Complete bulk water addition before creating the bulk excipient production charge")
+    recipe=BULK_RECIPES.get(po.bulk_material or "Propylene Glycol", BULK_RECIPES["Propylene Glycol"])
+    if payload.source_tank != recipe["tank_code"]:
+        raise ValueError(f"{po.bulk_material} for {po.po_number} must be charged from {recipe['tank_code']}")
     existing=db.scalar(select(BulkTransfer).where(BulkTransfer.po_number==payload.po_number, BulkTransfer.status.in_(["Awaiting Verification","Ready","Transferring","Complete"])).order_by(BulkTransfer.id.desc()))
     if existing: return existing
     item=BulkTransfer(transfer_id=f"BT-{uuid4().hex[:8].upper()}",po_number=payload.po_number,source_tank=payload.source_tank,destination_tank=payload.destination_tank,material_code=tank.material_code,quantity_kg=payload.quantity_kg,operator=payload.operator)
@@ -1315,8 +1484,8 @@ def bulk_transfer_action(db,transfer_id,action):
         if batch:
           batch.mass_kg += item.quantity_kg
           batch.level_percent = min(100, batch.level_percent + 27)
-          batch.phase = "Bulk PG Confirmation"
-          batch.status = "Awaiting Bulk PG Confirmation"
+          batch.phase = "Bulk Excipient Confirmation"
+          batch.status = "Awaiting Bulk Excipient Confirmation"
           batch.progress = 100
         record_event(db,event_type="BulkTransferComplete",source="Mixing",entity_type="ProductionOrder",entity_id=item.po_number,message=f"{item.quantity_kg:.0f} kg {item.material_code} transferred {item.source_tank} to {item.destination_tank}; operator confirmation required.",severity="info")
     elif action=="diagnose": item.fault_diagnosed=True

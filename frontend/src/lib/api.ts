@@ -1,7 +1,15 @@
 import type * as T from "../types";
-const configuredBase = (import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000")
-  .trim()
-  .replace(/\/$/, "");
+function normalizeConfiguredUrl(value: string): string {
+  const trimmed = value.trim();
+  // Defensive cleanup for accidentally pasted Markdown links such as
+  // [http://127.0.0.1:8000](http://127.0.0.1:8000).
+  const markdown = trimmed.match(/^\[(https?:\/\/[^\]]+)\]\(https?:\/\/[^)]+\)$/);
+  return (markdown?.[1] ?? trimmed).replace(/\/$/, "");
+}
+
+const configuredBase = normalizeConfiguredUrl(
+  import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000",
+);
 
 const BASE = configuredBase.endsWith("/api")
   ? configuredBase
@@ -42,6 +50,8 @@ async function request<R>(path: string, init: RequestInit = {}): Promise<R> {
 }
 export const api={
  health:()=>request<T.HealthResponse>("/health"),
+ parkingStatus:()=>request<T.ParkingStatus>("/facility/parking-status"),
+ securityStatus:()=>request<T.SecurityStatus>("/facility/security-status"),
  trainingRoles:async()=> (await request<{roles:string[]}>("/training/roles")).roles,
  startTrainingSession:(role:string,difficulty:string)=>request<T.TrainingSession>("/training/session",{method:"POST",body:JSON.stringify({role,difficulty})}),
  advanceTrainingSession:(sessionId:string,correct=true,note="")=>request<T.TrainingSession>(`/training/session/${sessionId}/advance`,{method:"POST",body:JSON.stringify({correct,note})}),

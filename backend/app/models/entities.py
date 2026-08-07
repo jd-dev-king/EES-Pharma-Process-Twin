@@ -23,6 +23,7 @@ class ProductionOrder(Base):
     hold_tank: Mapped[str] = mapped_column(String(30), default="H-301")
     packaging_line: Mapped[str] = mapped_column(String(30), default="PKG-01")
     requires_premix: Mapped[bool] = mapped_column(Boolean, default=False)
+    bulk_material: Mapped[str] = mapped_column(String(80), default="Propylene Glycol")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -204,6 +205,7 @@ class MixBatch(Base):
     temperature_c: Mapped[float] = mapped_column(Float, default=22)
     rpm: Mapped[int] = mapped_column(Integer, default=0)
     requires_premix: Mapped[bool] = mapped_column(Boolean, default=False)
+    bulk_material: Mapped[str] = mapped_column(String(80), default="Propylene Glycol")
     premix_status: Mapped[str] = mapped_column(String(40), default="Not Required")
     manual_adds_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     selected_hold_tank: Mapped[str | None] = mapped_column(String(30), nullable=True)

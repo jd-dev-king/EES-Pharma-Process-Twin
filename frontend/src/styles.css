@@ -510,3 +510,647 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
 .error-banner { margin-top: 1rem; padding: .85rem 1rem; border: 1px solid rgba(255, 91, 118, .5); border-radius: .75rem; background: rgba(143, 26, 51, .25); }
 
 .zone-nav-icon-readiness{background:linear-gradient(135deg,rgba(255,184,79,.28),rgba(66,215,176,.22));color:#ffe0a3}.topbar-actions .button{white-space:nowrap}
+
+
+/* vNext: finished-goods reconciliation + campus parking integration */
+.fg-reconciliation-panel{display:grid;gap:.75rem;margin-top:.85rem;padding:.9rem;border:1px solid rgba(87,202,232,.2);border-radius:12px;background:rgba(4,24,36,.72)}
+.fg-reconciliation-panel.short{border-color:rgba(243,180,63,.48);background:rgba(92,63,10,.16)}
+.fg-reconciliation-panel.balanced{border-color:rgba(68,227,164,.35)}
+.fg-reconciliation-panel small{display:block;color:var(--muted);letter-spacing:.08em}.fg-reconciliation-panel strong{display:block;margin:.18rem 0}.fg-reconciliation-panel p{margin:.25rem 0;color:var(--muted)}
+.fg-count-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.45rem}.fg-count-grid article{padding:.55rem;border:1px solid rgba(93,205,235,.15);border-radius:9px;background:rgba(5,28,42,.66)}.fg-count-grid span,.fg-count-grid strong{display:block}.fg-count-grid span{font-size:.66rem;color:var(--muted)}
+.twin-parking-campus{position:absolute;right:-2%;bottom:-1%;width:30%;height:17%;border:2px solid rgba(76,197,226,.38);border-radius:9px;background:linear-gradient(145deg,rgba(10,39,52,.96),rgba(3,21,31,.97));transform:translateZ(12px);cursor:pointer;color:inherit;box-shadow:0 0 28px rgba(33,160,194,.15);overflow:hidden}.twin-parking-campus:hover{border-color:#63def4;box-shadow:0 0 34px rgba(58,205,239,.32)}.twin-parking-campus.offline{filter:saturate(.45)}
+.parking-campus-label{position:absolute;left:7px;top:7px;z-index:4;padding:.35rem .45rem;border-radius:7px;background:rgba(2,15,23,.9);transform:translateZ(24px) rotateZ(35deg) rotateX(-58deg);transform-origin:left top;text-align:left;white-space:nowrap}.parking-campus-label b,.parking-campus-label strong,.parking-campus-label small{display:block}.parking-campus-label b{font-size:.5rem;color:#63def4}.parking-campus-label strong{font-size:.68rem}.parking-campus-label small{font-size:.48rem;color:#a6c0cc}.parking-campus-grid{position:absolute;inset:28% 6% 8%;display:grid;grid-template-columns:repeat(8,1fr);gap:4px}.parking-campus-grid i{display:block;border:1px solid rgba(114,198,218,.32);background:rgba(7,31,43,.72)}.parking-campus-grid i.occupied{background:linear-gradient(135deg,#42bad8,#89e8f6);box-shadow:0 0 6px rgba(76,215,241,.5)}.parking-gate-arm{position:absolute;left:3%;bottom:5%;width:28%;height:3px;background:#ffc35b;transform-origin:left;animation:parkingGate 4s ease-in-out infinite}@keyframes parkingGate{0%,60%,100%{transform:rotate(0deg)}75%,90%{transform:rotate(-55deg)}}
+.twin-parking-hud{display:grid;gap:.45rem;margin-top:.8rem;padding:.7rem;border:1px solid rgba(74,201,232,.2);border-radius:11px;background:rgba(6,31,45,.74)}.twin-parking-hud>div{display:flex;justify-content:space-between;gap:.7rem}.twin-parking-hud span,.twin-parking-hud small{color:var(--muted);font-size:.68rem}.twin-parking-hud strong{font-size:.76rem}.twin-parking-hud .button{margin-top:.2rem}
+@media(max-width:900px){.fg-count-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.twin-parking-campus{right:1%;bottom:1%;width:34%;height:15%}}
+
+/* Enterprise Security Command Center */
+.overview-security-strip{display:grid;grid-template-columns:1.45fr repeat(5,minmax(105px,.65fr)) auto;gap:.7rem;align-items:center;padding:1.05rem;border:1px solid rgba(93,216,188,.22);border-radius:18px;background:radial-gradient(circle at 12% 50%,rgba(35,215,174,.12),transparent 28%),rgba(5,20,33,.94)}
+.overview-security-strip.offline{border-color:rgba(255,101,125,.25)}
+.overview-security-strip article{padding:.7rem;border-left:1px solid rgba(93,216,188,.18)}
+.overview-security-strip span,.overview-security-strip strong,.overview-security-strip small{display:block}.overview-security-strip span,.overview-security-strip small{color:var(--muted);font-size:.72rem}.overview-security-strip strong{margin:.2rem 0;color:#9ff6d5;font-size:1.15rem}
+.security-command-shell{display:grid;gap:1rem}.security-command-hero{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:1rem;align-items:center;padding:1.2rem;border:1px solid rgba(83,205,181,.2);border-radius:20px;background:radial-gradient(circle at 82% 35%,rgba(44,220,180,.13),transparent 28%),rgba(5,20,33,.94)}
+.security-command-hero h1{margin:.2rem 0 .45rem}.security-command-hero p{max-width:820px;color:var(--muted)}.security-status-orb{display:grid;place-content:center;width:165px;height:165px;border-radius:50%;text-align:center;border:1px solid rgba(85,214,182,.4);box-shadow:0 0 45px rgba(51,220,179,.14);justify-self:end}.security-status-orb span,.security-status-orb strong,.security-status-orb small{display:block}.security-status-orb strong{margin:.35rem 0;color:#6af0c2}.security-status-orb small,.security-status-orb span{color:var(--muted)}.security-status-orb.offline strong{color:#ff6b82}
+.security-kpi-grid{display:grid;grid-template-columns:repeat(8,minmax(100px,1fr));gap:.65rem}.security-kpi-grid article,.security-command-panel{padding:.9rem;border:1px solid rgba(84,196,175,.16);border-radius:14px;background:rgba(5,20,33,.9)}.security-kpi-grid span,.security-kpi-grid small{display:block;color:var(--muted);font-size:.72rem}.security-kpi-grid strong{display:block;margin:.35rem 0;font-size:1.4rem;color:#a8f7dc}
+.security-command-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.security-command-panel header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem}.security-command-panel h2{margin:.15rem 0}.security-roster,.security-event-list{display:grid;gap:.55rem}.security-roster article,.security-event{padding:.75rem;border:1px solid rgba(83,192,172,.14);border-radius:11px;background:rgba(7,28,43,.8)}.security-roster article>div{display:flex;justify-content:space-between;gap:.7rem}.security-roster p,.security-event p{margin:.2rem 0;color:var(--muted)}.security-roster small,.security-event small,.security-event time{color:var(--muted);font-size:.72rem}.security-event{display:grid;grid-template-columns:90px 1fr;gap:.7rem}.security-event.denied{border-color:rgba(255,101,125,.35)}.security-event.approved,.security-event.granted{border-color:rgba(91,225,177,.3)}
+@media(max-width:1350px){.overview-security-strip{grid-template-columns:repeat(3,1fr)}.security-kpi-grid{grid-template-columns:repeat(4,1fr)}}@media(max-width:900px){.security-command-hero,.security-command-grid{grid-template-columns:1fr}.security-status-orb{justify-self:start}.security-kpi-grid{grid-template-columns:repeat(2,1fr)}}
+
+
+/* vNext hotfix — keep Pharma Employee Parking outside the Automation department
+   and keep its campus label readable without selecting/clicking the lot. */
+.twin-parking-campus {
+  right: -24%;
+  bottom: 18%;
+  width: 25%;
+  height: 15%;
+  z-index: 6;
+  overflow: visible;
+  transform: translateZ(18px);
+}
+
+.twin-parking-campus:hover,
+.twin-parking-campus:focus-visible {
+  z-index: 12;
+}
+
+.parking-campus-label {
+  left: 8px;
+  top: -54px;
+  z-index: 20;
+  min-width: 190px;
+  padding: .45rem .55rem;
+  border: 1px solid rgba(99, 222, 244, .32);
+  background: rgba(2, 15, 23, .96);
+  transform: translateZ(42px) rotateZ(35deg) rotateX(-58deg);
+  transform-origin: left bottom;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .38);
+  pointer-events: none;
+  opacity: 1;
+  visibility: visible;
+}
+
+.parking-campus-label b {
+  font-size: .58rem;
+}
+
+.parking-campus-label strong {
+  font-size: .76rem;
+}
+
+.parking-campus-label small {
+  font-size: .54rem;
+}
+
+@media (max-width: 1200px) {
+  .twin-parking-campus {
+    right: -15%;
+    bottom: 15%;
+    width: 25%;
+    height: 14%;
+  }
+}
+
+@media (max-width: 900px) {
+  .twin-parking-campus {
+    right: -8%;
+    bottom: 13%;
+    width: 28%;
+    height: 14%;
+  }
+
+  .parking-campus-label {
+    top: -48px;
+    min-width: 165px;
+  }
+}
+
+
+/* Parking visibility hotfix v2
+   Keep the lot clearly visible inside the 3D canvas, away from Automation,
+   and render the identification card upright at normal browser zoom. */
+.twin-parking-campus {
+  right: 3% !important;
+  bottom: 26% !important;
+  width: 34% !important;
+  height: 23% !important;
+  min-width: 260px;
+  min-height: 120px;
+  z-index: 18 !important;
+  overflow: visible !important;
+  transform: translateZ(28px) !important;
+  border-width: 2px;
+  box-shadow:
+    0 0 0 1px rgba(99, 222, 244, .12),
+    0 0 36px rgba(58, 205, 239, .22);
+}
+
+.twin-parking-campus:hover,
+.twin-parking-campus:focus-visible {
+  z-index: 24 !important;
+  border-color: #63def4;
+}
+
+.parking-campus-label {
+  left: 12px !important;
+  top: 10px !important;
+  z-index: 30 !important;
+  min-width: 235px !important;
+  max-width: calc(100% - 24px);
+  padding: .65rem .75rem !important;
+  border: 1px solid rgba(99, 222, 244, .55) !important;
+  border-radius: 9px;
+  background: rgba(2, 15, 23, .97) !important;
+  transform: none !important;
+  transform-origin: center !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .42);
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none;
+  white-space: normal !important;
+}
+
+.parking-campus-label b {
+  font-size: .72rem !important;
+  letter-spacing: .08em;
+}
+
+.parking-campus-label strong {
+  margin-top: .12rem;
+  font-size: 1rem !important;
+  line-height: 1.15;
+}
+
+.parking-campus-label small {
+  margin-top: .2rem;
+  font-size: .68rem !important;
+  line-height: 1.25;
+}
+
+.parking-campus-grid {
+  inset: 43% 7% 9% !important;
+  gap: 5px !important;
+}
+
+.parking-gate-arm {
+  left: 4% !important;
+  bottom: 6% !important;
+  width: 24% !important;
+}
+
+@media (max-width: 1200px) {
+  .twin-parking-campus {
+    right: 2% !important;
+    bottom: 24% !important;
+    width: 36% !important;
+    height: 22% !important;
+    min-width: 230px;
+  }
+
+  .parking-campus-label {
+    min-width: 205px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .twin-parking-campus {
+    right: 2% !important;
+    bottom: 20% !important;
+    width: 40% !important;
+    height: 21% !important;
+    min-width: 200px;
+  }
+
+  .parking-campus-label {
+    left: 8px !important;
+    top: 8px !important;
+    min-width: 180px !important;
+    padding: .55rem .6rem !important;
+  }
+
+  .parking-campus-label strong {
+    font-size: .88rem !important;
+  }
+}
+
+
+/* ============================================================
+   EES Pharma 3D Navigation — Parking Outer Perimeter Placement
+   Places Pharma Employee Parking OUTSIDE the plant wall along
+   the Reliability → Compliance → Automation side of campus.
+   ============================================================ */
+
+/* Give the overview enough vertical campus space for an exterior lot. */
+.twin-viewport {
+  min-height: 860px !important;
+}
+
+/* Keep the plant itself slightly higher in the overview so the exterior
+   parking campus has dedicated space beneath the south perimeter wall. */
+.camera-overview .twin-scene {
+  top: 43% !important;
+  transform:
+    translate(-50%, -47%)
+    rotateX(58deg)
+    rotateZ(-35deg)
+    scale(.73) !important;
+}
+
+/* Exterior employee parking campus.
+   Plant rooms finish at ~97% of the scene height; parking begins at 104%,
+   so it cannot cover Reliability, Compliance, Automation, Shipping or QA. */
+.twin-parking-campus {
+  left: 31% !important;
+  right: auto !important;
+  top: 104% !important;
+  bottom: auto !important;
+
+  width: 64% !important;
+  height: 27% !important;
+  min-width: 0 !important;
+  min-height: 150px !important;
+
+  z-index: 20 !important;
+  overflow: visible !important;
+
+  border: 2px solid rgba(97, 231, 157, .62) !important;
+  border-radius: 18px !important;
+
+  background:
+    linear-gradient(90deg, rgba(59, 213, 137, .08), transparent 20% 80%, rgba(59, 213, 137, .08)),
+    linear-gradient(145deg, rgba(8, 28, 35, .98), rgba(3, 16, 24, .99)) !important;
+
+  box-shadow:
+    0 0 0 1px rgba(107, 240, 171, .12),
+    0 0 42px rgba(55, 206, 139, .18) !important;
+
+  transform: translateZ(22px) !important;
+}
+
+/* Short access road joining the plant perimeter to the parking campus. */
+.twin-parking-campus::before {
+  content: "";
+  position: absolute;
+  left: 46%;
+  top: -25%;
+  width: 15%;
+  height: 28%;
+  border-left: 2px solid rgba(99, 222, 244, .4);
+  border-right: 2px solid rgba(99, 222, 244, .4);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(154, 205, 218, .18) 0 8px,
+      rgba(4, 21, 30, .84) 8px 18px
+    );
+  pointer-events: none;
+}
+
+.twin-parking-campus:hover,
+.twin-parking-campus:focus-visible {
+  z-index: 28 !important;
+  border-color: #6af1ac !important;
+  box-shadow:
+    0 0 0 1px rgba(106, 241, 172, .24),
+    0 0 52px rgba(64, 229, 157, .32) !important;
+}
+
+/* Parking spaces fill the exterior lot instead of sitting under the label. */
+.parking-campus-grid {
+  inset: 18% 5% 8% !important;
+  grid-template-columns: repeat(12, 1fr) !important;
+  grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+  gap: 5px !important;
+}
+
+.parking-campus-grid i {
+  border-color: rgba(115, 222, 174, .32) !important;
+  background: rgba(7, 30, 38, .78) !important;
+}
+
+.parking-campus-grid i.occupied {
+  background: linear-gradient(135deg, #42bad8, #6ef0ac) !important;
+  box-shadow: 0 0 7px rgba(83, 231, 180, .55) !important;
+}
+
+/* Counter-rotate the label against the isometric scene so it reads clearly
+   at normal 100% browser zoom. */
+.parking-campus-label {
+  left: 25% !important;
+  top: 34% !important;
+
+  z-index: 35 !important;
+  min-width: 330px !important;
+  max-width: 50% !important;
+
+  padding: .72rem .9rem !important;
+  border: 1px solid rgba(105, 240, 170, .62) !important;
+  border-radius: 11px !important;
+
+  background: rgba(2, 15, 23, .97) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .44) !important;
+
+  transform:
+    translateZ(58px)
+    rotateZ(35deg)
+    rotateX(-58deg) !important;
+  transform-origin: center center !important;
+
+  text-align: center !important;
+  white-space: normal !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: none !important;
+}
+
+.parking-campus-label b {
+  color: #6ef0ac !important;
+  font-size: .8rem !important;
+  letter-spacing: .08em !important;
+}
+
+.parking-campus-label strong {
+  margin-top: .15rem !important;
+  font-size: 1.08rem !important;
+  line-height: 1.15 !important;
+}
+
+.parking-campus-label small {
+  margin-top: .2rem !important;
+  font-size: .7rem !important;
+  line-height: 1.3 !important;
+  color: #b6ccd4 !important;
+}
+
+/* Gate sits at the plant-facing edge of the exterior lot. */
+.parking-gate-arm {
+  left: 5% !important;
+  bottom: 8% !important;
+  width: 18% !important;
+  height: 4px !important;
+  background: #ffc35b !important;
+}
+
+/* In focused camera presets the departments remain the priority.
+   The parking lot stays part of the campus but does not obscure the zoomed room. */
+.camera-production .twin-parking-campus,
+.camera-warehouse .twin-parking-campus,
+.camera-labs .twin-parking-campus,
+.camera-shipping .twin-parking-campus {
+  opacity: .36;
+}
+
+.camera-production .twin-parking-campus:hover,
+.camera-warehouse .twin-parking-campus:hover,
+.camera-labs .twin-parking-campus:hover,
+.camera-shipping .twin-parking-campus:hover {
+  opacity: 1;
+}
+
+/* Responsive campus placement. */
+@media (max-width: 1200px) {
+  .twin-viewport {
+    min-height: 820px !important;
+  }
+
+  .twin-parking-campus {
+    left: 29% !important;
+    top: 103% !important;
+    width: 66% !important;
+    height: 25% !important;
+  }
+
+  .parking-campus-label {
+    left: 22% !important;
+    min-width: 280px !important;
+    max-width: 56% !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .twin-viewport {
+    min-height: 760px !important;
+  }
+
+  .twin-parking-campus {
+    left: 24% !important;
+    top: 102% !important;
+    width: 72% !important;
+    height: 23% !important;
+    min-height: 125px !important;
+  }
+
+  .parking-campus-label {
+    left: 18% !important;
+    top: 30% !important;
+    min-width: 230px !important;
+    max-width: 64% !important;
+    padding: .58rem .68rem !important;
+  }
+
+  .parking-campus-label b {
+    font-size: .68rem !important;
+  }
+
+  .parking-campus-label strong {
+    font-size: .9rem !important;
+  }
+
+  .parking-campus-label small {
+    font-size: .62rem !important;
+  }
+}
+
+
+/* ============================================================
+   Parking Readability Patch
+   Screen-space sign sits outside the transformed isometric scene,
+   so text remains large and upright at 100% browser zoom.
+   ============================================================ */
+
+.twin-viewport {
+  position: relative;
+}
+
+/* Dedicated readable parking sign anchored to the exterior-lot side. */
+.parking-campus-sign {
+  position: absolute;
+  right: 5.5%;
+  bottom: 6%;
+  z-index: 60;
+
+  width: min(390px, 37%);
+  min-width: 300px;
+  padding: .85rem 1rem;
+
+  display: grid;
+  gap: .16rem;
+  text-align: left;
+
+  border: 1px solid rgba(106, 241, 172, .72);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(4, 25, 31, .98), rgba(3, 15, 23, .98));
+  box-shadow:
+    0 0 0 1px rgba(106, 241, 172, .12),
+    0 10px 32px rgba(0, 0, 0, .48),
+    0 0 30px rgba(66, 225, 159, .15);
+
+  color: #edf9fb;
+  cursor: pointer;
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.parking-campus-sign:hover,
+.parking-campus-sign:focus-visible {
+  transform: translateY(-2px);
+  border-color: #7ff7bb;
+  box-shadow:
+    0 0 0 1px rgba(127, 247, 187, .22),
+    0 14px 38px rgba(0, 0, 0, .52),
+    0 0 36px rgba(66, 225, 159, .24);
+  outline: none;
+}
+
+.parking-campus-sign-kicker {
+  color: #68dff5;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+.parking-campus-sign strong {
+  color: #74f0ad;
+  font-size: 1rem;
+  line-height: 1.15;
+  letter-spacing: .04em;
+}
+
+.parking-campus-sign-status {
+  color: #f4fbfd;
+  font-size: .9rem;
+  font-weight: 800;
+}
+
+.parking-campus-sign small {
+  color: #b8ccd4;
+  font-size: .72rem;
+  line-height: 1.35;
+}
+
+.parking-campus-sign.online::before,
+.parking-campus-sign.offline::before {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.parking-campus-sign.online::before {
+  background: #64edaa;
+  box-shadow: 0 0 12px rgba(100, 237, 170, .9);
+}
+
+.parking-campus-sign.offline::before {
+  background: #ffbe55;
+  box-shadow: 0 0 10px rgba(255, 190, 85, .7);
+}
+
+/* The in-scene label becomes a compact locator only.
+   The new screen-space sign carries the readable name/status. */
+.parking-campus-label {
+  left: 39% !important;
+  top: 43% !important;
+  min-width: 92px !important;
+  max-width: 110px !important;
+  padding: .3rem .4rem !important;
+  gap: 0 !important;
+}
+
+.parking-campus-label b {
+  font-size: .52rem !important;
+  letter-spacing: .08em !important;
+}
+
+.parking-campus-label strong {
+  font-size: .7rem !important;
+  margin-top: .05rem !important;
+}
+
+.parking-campus-label small {
+  display: none !important;
+}
+
+@media (max-width: 1200px) {
+  .parking-campus-sign {
+    right: 4%;
+    bottom: 5%;
+    width: min(350px, 39%);
+    min-width: 280px;
+  }
+}
+
+@media (max-width: 900px) {
+  .parking-campus-sign {
+    left: 50%;
+    right: auto;
+    bottom: 3%;
+    transform: translateX(-50%);
+    width: min(430px, 82%);
+    min-width: 0;
+  }
+
+  .parking-campus-sign:hover,
+  .parking-campus-sign:focus-visible {
+    transform: translateX(-50%) translateY(-2px);
+  }
+}
+
+
+/* ============================================================
+   Parking Label Realignment Hotfix
+   Keep the readable parking card BESIDE the exterior parking lot
+   instead of at the bottom of the 3D viewport.
+   ============================================================ */
+
+.parking-campus-sign {
+  left: auto !important;
+  right: 6.5% !important;
+  top: auto !important;
+  bottom: 28% !important;
+
+  width: min(360px, 35%) !important;
+  min-width: 300px !important;
+  max-width: 380px !important;
+
+  z-index: 70 !important;
+}
+
+/* Keep the card visually associated with the parking lot while leaving
+   the plant floor, Reliability, Compliance, Automation, Shipping and QA clear. */
+.parking-campus-sign::after {
+  content: "";
+  position: absolute;
+  left: -34px;
+  bottom: 24px;
+  width: 30px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(106, 241, 172, .18),
+    rgba(106, 241, 172, .85)
+  );
+  box-shadow: 0 0 8px rgba(106, 241, 172, .45);
+  pointer-events: none;
+}
+
+@media (max-width: 1200px) {
+  .parking-campus-sign {
+    right: 4.5% !important;
+    bottom: 26% !important;
+    width: min(335px, 37%) !important;
+    min-width: 275px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .parking-campus-sign {
+    left: auto !important;
+    right: 3% !important;
+    bottom: 22% !important;
+
+    width: min(320px, 43%) !important;
+    min-width: 240px !important;
+
+    transform: none !important;
+  }
+
+  .parking-campus-sign:hover,
+  .parking-campus-sign:focus-visible {
+    transform: translateY(-2px) !important;
+  }
+}

@@ -11,12 +11,14 @@ import { SustainabilityCenter } from "./sustainability/SustainabilityCenter";
 import { WorkforceCenter } from "./workforce/WorkforceCenter";
 import { WorkforceErrorBoundary } from "./workforce/WorkforceErrorBoundary";
 import { ReleaseReadinessCenter } from "./readiness/ReleaseReadinessCenter";
+import { SecurityCommandCenter } from "./security/SecurityCommandCenter";
 import { ApiError, api } from "./lib/api";
 import type * as T from "./types";
 
 type ZoneId =
   | "command"
   | "twin"
+  | "security"
   | "office"
   | "warehouse"
   | "weighing"
@@ -49,6 +51,7 @@ interface ZoneDefinition {
 const zones: ZoneDefinition[] = [
   { id: "command", label: "Enterprise Command Center", shortLabel: "Command", description: "Enterprise overview and digital thread", status: "live" },
   { id: "readiness", label: "Release Readiness & Demo Administration", shortLabel: "Release", description: "Controlled demo reset, validation gates, documentation, and public-release preparation", status: "live" },
+  { id: "security", label: "Security Command Center", shortLabel: "Security", description: "Parking access, active occupants, security reviews, and gate activity", status: "live" },
   { id: "twin", label: "Immersive 3D Plant Digital Twin", shortLabel: "3D Twin", description: "Interactive isometric facility, live equipment state, camera presets, and asset navigation", status: "live" },
   { id: "office", label: "Office & Production Scheduling", shortLabel: "Office", description: "PO registration, materials, approvals, and routing", status: "live" },
   { id: "warehouse", label: "Warehouse Black Zone", shortLabel: "Warehouse", description: "Inventory, FEFO, transfer orders, and delivery", status: "live" },
@@ -83,6 +86,8 @@ const initialPo: T.ProductionOrderPayload = {
   hold_tank: "H-301",
   packaging_line: "PKG-01",
   requires_premix: true,
+  flavor: "Cherry",
+  bulk_material: "Propylene Glycol",
 };
 
 const initialRoute: T.SchedulerConflictPayload = {
@@ -90,6 +95,12 @@ const initialRoute: T.SchedulerConflictPayload = {
   mix_tank: "V-202",
   hold_tank: "H-302",
   packaging_line: "PKG-02",
+};
+
+const bulkRecipeByMaterial: Record<string, { tankCode: string; quantityKg: number }> = {
+  "Propylene Glycol": { tankCode: "PG-101", quantityKg: 420 },
+  "Glycerin": { tankCode: "GLY-101", quantityKg: 400 },
+  "Sorbitol Solution": { tankCode: "SOR-101", quantityKg: 450 },
 };
 
 function asArray<TValue>(value: unknown): TValue[] {
@@ -114,6 +125,8 @@ export default function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const [health, setHealth] = useState<T.HealthResponse | null>(null);
+  const [parkingStatus, setParkingStatus] = useState<T.ParkingStatus | null>(null);
+  const [securityStatus, setSecurityStatus] = useState<T.SecurityStatus | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [productionOrders, setProductionOrders] = useState<T.ProductionOrder[]>([]);
   const [warehouseQueue, setWarehouseQueue] = useState<T.WarehouseTransferOrder[]>([]);
@@ -214,9 +227,25 @@ export default function App() {
     setLoading(true);
     setError(null);
 
+    // Check API health independently. Optional parking/security integration
+    // must never make a healthy FastAPI service display as API OFFLINE.
+    let healthData: T.HealthResponse;
+
+try {
+  healthData = await api.health();
+  setHealth(healthData);
+} catch (healthError) {
+  setHealth(null);
+  setError(errorMessage(healthError));
+  refreshInFlight.current = false;
+  setLoading(false);
+  return;
+}
+
     try {
       const [
-        healthData,
+        parkingData,
+        securityData,
         roleData,
         poData,
         queueData,
@@ -237,7 +266,8 @@ export default function App() {
         packagingRunData,
         qaFgTaskData, packagingDowntimeData, packagingKpiData, maintenanceWorkOrderData, cipRunData, shippingReadyData, shipmentData, ebrBatchData, batchReviewData, auditTrailData, bulkTankData, bulkDeliveryData, bulkTransferData,
       ] = await Promise.all([
-        api.health(),
+        api.parkingStatus().catch(() => null),
+        api.securityStatus().catch(() => null),
         api.trainingRoles(),
         api.productionOrders(),
         api.warehouseQueue(),
@@ -262,7 +292,8 @@ export default function App() {
       const normalizedPos = asArray<T.ProductionOrder>(poData);
       const normalizedQueue = asArray<T.WarehouseTransferOrder>(queueData);
 
-      setHealth(healthData);
+      setParkingStatus((parkingData as T.ParkingStatus | null) ?? null);
+      setSecurityStatus((securityData as T.SecurityStatus | null) ?? null);
       setRoles(asArray<string>(roleData));
       setProductionOrders(normalizedPos);
       setWarehouseQueue(normalizedQueue);
@@ -296,7 +327,7 @@ export default function App() {
       setBulkTransfers(asArray<T.BulkTransfer>(bulkTransferData));
 
       // Keep the open Mixing HMI synchronized with automatic bulk-transfer updates.
-      // The transfer tick changes the MixBatch phase to "Bulk PG Confirmation"
+      // The transfer tick changes the MixBatch phase to "Bulk Excipient Confirmation"
       // on the backend, so the selected workspace must be reloaded as well.
       if (selectedMixBatch) {
         setMixWorkspace(await api.mixWorkspace(selectedMixBatch));
@@ -316,7 +347,8 @@ export default function App() {
         setSelectedTo(normalizedQueue[0].to_number);
       }
     } catch (refreshError) {
-      setHealth(null);
+      // API health already passed. Surface the subsystem failure without
+      // falsely marking the FastAPI service offline.
       setError(errorMessage(refreshError));
     } finally {
       refreshInFlight.current = false;
@@ -431,7 +463,7 @@ export default function App() {
     const po = productionOrders.find((item) => item.po_number === run.po_number);
     return sum + (po?.quantity ?? run.bottles_completed);
   }, 0);
-  const totalProducedUnits = completedPackagingRuns.reduce((sum, run) => sum + run.bottles_completed, 0);
+  const totalProducedUnits = completedPackagingRuns.reduce((sum, run) => sum + Math.max(0, run.bottles_completed - run.rejects), 0);
   const yieldPercent = totalPlannedUnits ? Math.min(100, Number((totalProducedUnits / totalPlannedUnits * 100).toFixed(1))) : 100;
   const rightFirstTime = productionOrders.length
     ? Number(((productionOrders.length - ebrBatches.filter((batch) => batch.exception_count > 0).length) / productionOrders.length * 100).toFixed(1))
@@ -677,9 +709,20 @@ export default function App() {
         }))}
         assets={overviewAssets}
         events={events.map((event) => ({ id: event.id, source: event.source, message: event.message, severity: event.severity, createdAt: event.created_at, zone: eventZone(event.source) }))}
+        parking={securityStatus}
+        onOpenSecurity={() => navigateTo("security")}
         onNavigate={(zone) => navigateTo(zone)}
       />
     );
+  }
+
+
+  function renderSecurityZone() {
+    return <SecurityCommandCenter
+      security={securityStatus}
+      onOpenParking={() => window.open(import.meta.env.VITE_PARKING_APP_URL ?? "http://localhost:5501", "_blank", "noopener,noreferrer")}
+      onReturn={() => navigateTo("command")}
+    />;
   }
 
 
@@ -699,6 +742,8 @@ export default function App() {
         assets={twinAssets}
         alarms={currentAlarms}
         activeOrders={activeBatches}
+        parking={parkingStatus}
+        onOpenParking={() => window.open(import.meta.env.VITE_PARKING_APP_URL ?? "http://localhost:5501", "_blank", "noopener,noreferrer")}
         onNavigate={(zone) => navigateTo(zone as ZoneId)}
         onReturn={() => navigateTo("command")}
       />
@@ -750,6 +795,9 @@ export default function App() {
               <label>PO<input value={poForm.po_number} onChange={(event) => setPoForm({ ...poForm, po_number: event.target.value })} /></label>
               <label>Batch<input value={poForm.batch_number} onChange={(event) => setPoForm({ ...poForm, batch_number: event.target.value })} /></label>
               <label className="wide">Product<input value={poForm.product_name} onChange={(event) => setPoForm({ ...poForm, product_name: event.target.value })} /></label>
+              <label>Flavor<select value={poForm.flavor} onChange={(event) => setPoForm({ ...poForm, flavor: event.target.value })}><option>Unflavored</option><option>Cherry</option><option>Orange</option><option>Lemon</option><option>Berry</option></select></label>
+              <label>Bulk Excipient<select value={poForm.bulk_material} onChange={(event) => setPoForm({ ...poForm, bulk_material: event.target.value })}><option>Propylene Glycol</option><option>Glycerin</option><option>Sorbitol Solution</option></select></label>
+              <label>Bulk Water<input value="Purified Water (fixed recipe bulk)" readOnly /></label>
               <label>Quantity<input type="number" value={poForm.quantity} onChange={(event) => setPoForm({ ...poForm, quantity: Number(event.target.value) })} /></label>
               <label>Priority<select value={poForm.priority} onChange={(event) => setPoForm({ ...poForm, priority: event.target.value })}><option>Critical</option><option>High</option><option>Normal</option><option>Low</option></select></label>
               <label className="wide">Destination<input value={poForm.destination} onChange={(event) => setPoForm({ ...poForm, destination: event.target.value })} /></label>
@@ -1167,6 +1215,40 @@ export default function App() {
                     <button className="button primary" onClick={() => void runAction(() => api.warehouseAction(activeTo.to_number, "pick"), activeTo.to_number.startsWith("TO-FG-") ? "Finished goods picked up from Packaging" : "Automatic warehouse pick completed")}>{activeTo.to_number.startsWith("TO-FG-") ? "Pick Up FG" : "Start Automatic Pick"}</button>
                     <button className="button primary" onClick={() => void runAction(() => api.warehouseAction(activeTo.to_number, "deliver"), activeTo.to_number.startsWith("TO-FG-") ? "Finished goods staged at Shipping Dock" : "Transfer order delivered")}>{activeTo.to_number.startsWith("TO-FG-") ? "Stage at Shipping Dock" : "Deliver"}</button>
                   </div>
+                  {activeTo.to_number.startsWith("TO-FG-") && (() => {
+                    const po = productionOrders.find((item) => item.po_number === activeTo.po_number);
+                    const run = packagingRuns.find((item) => item.po_number === activeTo.po_number);
+                    if (!po || !run) return null;
+                    const gross = run.bottles_completed;
+                    const rejects = run.rejects;
+                    const good = Math.max(0, gross - rejects);
+                    const shortfall = Math.max(0, po.quantity - good);
+                    const reconciliation = routeChanges.find((request) => request.po_number === po.po_number && request.resource_type === "finished_goods_quantity" && request.requested_resource === String(good));
+                    return (
+                      <div className={`fg-reconciliation-panel ${shortfall > 0 ? "short" : "balanced"}`}>
+                        <div className="fg-count-grid">
+                          <article><span>PO Target</span><strong>{po.quantity}</strong></article>
+                          <article><span>Gross Filled</span><strong>{gross}</strong></article>
+                          <article><span>Rejected</span><strong>{rejects}</strong></article>
+                          <article><span>Final Good Bottles</span><strong>{good}</strong></article>
+                          <article><span>Exact Difference</span><strong>{shortfall}</strong></article>
+                        </div>
+                        {shortfall > 0 && !reconciliation && (
+                          <button className="button warning" onClick={() => void runAction(() => api.requestRouteChange({
+                            po_number: po.po_number,
+                            resource_type: "finished_goods_quantity",
+                            current_resource: String(po.quantity),
+                            requested_resource: String(good),
+                            reason: `FG reconciliation before pickup: ${good} good bottles, ${rejects} rejects, exact shortfall ${shortfall}`,
+                            requester: "Warehouse",
+                          }), `Office notified of exact FG count: ${good} (-${shortfall})`)}>
+                            Request Exact Difference from Office · {good} (-{shortfall})
+                          </button>
+                        )}
+                        {reconciliation && <p><strong>Office reconciliation:</strong> {reconciliation.status} · {reconciliation.current_resource} → {reconciliation.requested_resource}</p>}
+                      </div>
+                    );
+                  })()}
                   {(() => {
                     const substitutionCandidate = asArray<T.MaterialComparison>(
                       workspace?.comparison,
@@ -1395,6 +1477,10 @@ export default function App() {
     const batch = mixWorkspace?.batch;
     const premix = mixWorkspace?.premix;
     const scheduledHold = productionOrders.find((po) => po.po_number === batch?.po_number)?.hold_tank;
+    const bulkProductionOrder = productionOrders.find((po) => po.po_number === bulkPo);
+    const bulkMaterial = bulkProductionOrder?.bulk_material ?? "Propylene Glycol";
+    const bulkRecipe = bulkRecipeByMaterial[bulkMaterial] ?? bulkRecipeByMaterial["Propylene Glycol"];
+    const bulkSourceTank = bulkTanks.find((tank) => tank.tank_code === bulkRecipe.tankCode);
 
     return (
       <div className="zone-stack">
@@ -1405,7 +1491,7 @@ export default function App() {
           <article><span>Process Faults</span><strong>{mixBatches.filter((item) => item.status === "Faulted").length}</strong></article>
         </div>
 
-        <SectionCard title="Propylene Glycol Production Charge" eyebrow="Bulk Tank Verification & Automatic Transfer">
+        <SectionCard title="Bulk Excipient Production Charge" eyebrow="PO-Selected Bulk Material · Tank Verification & Automatic Transfer">
           <div className="form-grid compact">
             <label>Production Order
               <select value={bulkPo} onChange={(event) => setBulkPo(event.target.value)}>
@@ -1414,29 +1500,35 @@ export default function App() {
                 ))}
               </select>
             </label>
+            <label>Bulk Material
+              <input value={bulkMaterial} readOnly />
+            </label>
             <label>Source Tank
-              <input value="PG-101" readOnly />
+              <input value={`${bulkRecipe.tankCode} · ${bulkMaterial}`} readOnly />
+            </label>
+            <label>Recipe Charge
+              <input value={`${bulkRecipe.quantityKg} kg`} readOnly />
             </label>
           </div>
           <div className="button-row">
             <button
               className="button secondary"
-              disabled={!bulkPo || bulkTanks.find((tank) => tank.tank_code === "PG-101")?.qa_status !== "Released"}
+              disabled={!bulkPo || bulkSourceTank?.qa_status !== "Released"}
               onClick={() =>
                 void runBulkAction(
                   () =>
                     api.createBulkTransfer({
                       po_number: bulkPo,
-                      source_tank: "PG-101",
+                      source_tank: bulkRecipe.tankCode,
                       destination_tank: productionOrders.find((po) => po.po_number === bulkPo)?.mix_tank ?? "V-201",
-                      quantity_kg: 420,
+                      quantity_kg: bulkRecipe.quantityKg,
                       operator: "Process Operator",
                     }),
-                  "PG charge created for Mixing verification",
+                  `${bulkMaterial} charge created for Mixing verification`,
                 )
               }
             >
-              Create PG Charge
+              Create Bulk Excipient Charge
             </button>
           </div>
           <div className="queue-list">
@@ -1444,7 +1536,7 @@ export default function App() {
               <article key={transfer.transfer_id} className="queue-card">
                 <div><strong>{transfer.transfer_id}</strong><span>{transfer.status}</span></div>
                 <p>{transfer.po_number} · {transfer.quantity_kg.toFixed(0)} kg {transfer.source_tank} → {transfer.destination_tank}</p>
-                <small>{transfer.status === "Complete" ? "Transferred — awaiting operator confirmation in Batch HMI" : "Bulk PG recipe charge"}</small>
+                <small>{transfer.status === "Complete" ? "Transferred — awaiting operator confirmation in Batch HMI" : `${bulkMaterial} recipe charge`}</small>
                 <div className="progress-track"><span style={{ width: `${transfer.progress}%` }} /></div>
                 <div className="button-row">
                   {transfer.status === "Awaiting Verification" && (
@@ -1456,7 +1548,7 @@ export default function App() {
                 </div>
               </article>
             ))}
-            {!bulkTransfers.length && <p className="empty-state">QA-released PG can be assigned to a production order here.</p>}
+            {!bulkTransfers.length && <p className="empty-state">The PO-selected QA-released bulk excipient can be assigned to production here.</p>}
           </div>
         </SectionCard>
 
@@ -1506,7 +1598,7 @@ export default function App() {
                   <div><strong>{po.po_number}</strong><span>Ready</span></div>
                   <p>{po.product_name}</p>
                   <small>{po.batch_number} · {po.mix_tank} → {po.hold_tank}</small>
-                  <small>{po.requires_premix ? "Dye premix required" : "No dye premix"}</small>
+                  <small>{po.bulk_material} bulk · {po.requires_premix ? "Dye premix required" : "No dye premix"}</small>
                 </article>
               ))}
               {mixBatches.map((item) => (
@@ -1554,16 +1646,16 @@ export default function App() {
                 )}
 
                 <div className="recipe-steps">
-                  {["Bulk Water Addition", "Bulk PG Verification", "Bulk PG Charge", "Bulk PG Confirmation", "Manual Additions", "Premix Required", "Final Agitation", "Select Hold Tank", "Transfer", "Transfer Complete"].map((step) => (
+                  {["Bulk Water Addition", "Bulk Excipient Verification", "Bulk Excipient Charge", "Bulk Excipient Confirmation", "Manual Additions", "Premix Required", "Final Agitation", "Select Hold Tank", "Transfer", "Transfer Complete"].map((step) => (
                     <span key={step} className={batch.phase === step || (step === "Transfer" && batch.phase === "Transfer Sample Required") ? "active" : ""}>{step}</span>
                   ))}
                 </div>
 
                 <div className="hmi-controls mix-controls">
                   {batch.status === "Ready" && <button className="button primary" onClick={() => void runMixAction(() => api.mixAction(batch.batch_id, "start", mixOperator), "Automatic batch sequence started")}>Start Batch</button>}
-                  {batch.phase === "Bulk PG Verification" && <p className="interlock-note">Create and verify the PG production charge above. Manual additions remain interlocked.</p>}
-                  {batch.phase === "Bulk PG Confirmation" && (
-                    <button className="button primary" onClick={() => void runMixAction(() => api.confirmBulkPg(batch.batch_id, mixOperator), "Bulk PG addition confirmed; manual additions released")}>Confirm Bulk PG Addition</button>
+                  {batch.phase === "Bulk Excipient Verification" && <p className="interlock-note">Create and verify the PO-selected bulk excipient charge above. Manual additions remain interlocked.</p>}
+                  {batch.phase === "Bulk Excipient Confirmation" && (
+                    <button className="button primary" onClick={() => void runMixAction(() => api.confirmBulkPg(batch.batch_id, mixOperator), "Bulk excipient addition confirmed; manual additions released")}>Confirm Bulk Excipient Addition</button>
                   )}
                   {batch.phase === "Manual Additions" && <button className="button primary" onClick={() => void runMixAction(() => api.mixAction(batch.batch_id, "confirm-manual-adds", mixOperator), "Manual additions confirmed")}>Confirm Manual Adds Complete</button>}
                   {batch.phase === "Premix Required" && premix?.status !== "Complete" && <button className="button secondary" onClick={() => void runMixAction(() => api.startPremix(batch.batch_id, mixOperator), "Premix automatic sequence started")}>Start Premix</button>}
@@ -1744,6 +1836,14 @@ export default function App() {
   function renderPackagingZone() {
     const run = packagingWorkspace?.run;
     const routePo = productionOrders.find((po) => po.po_number === (run?.po_number ?? packagingQueue[0]?.po_number));
+    const grossBottleCount = run?.bottles_completed ?? 0;
+    const rejectedBottleCount = run?.rejects ?? 0;
+    const finalGoodBottleCount = Math.max(0, grossBottleCount - rejectedBottleCount);
+    const plannedBottleCount = routePo?.quantity ?? 0;
+    const finishedGoodsShortfall = Math.max(0, plannedBottleCount - finalGoodBottleCount);
+    const fgReconciliation = routePo
+      ? routeChanges.find((request) => request.po_number === routePo.po_number && request.resource_type === "finished_goods_quantity" && request.requested_resource === String(finalGoodBottleCount))
+      : undefined;
     return (
       <div className="zone-stack">
         <div className="zone-summary-grid">
@@ -1787,7 +1887,29 @@ export default function App() {
             {run ? (
               <div className="mix-hmi">
                 <div className="hmi-header"><div><span>{run.run_id}</span><strong>{run.po_number} · {run.line_code}</strong></div><StatusBadge label={run.status} state={run.status === "Faulted" ? "offline" : "online"} /></div>
-                <div className="process-metrics"><article><span>Progress</span><strong>{run.progress}%</strong></article><article><span>Speed</span><strong>{run.speed_bpm} bpm</strong></article><article><span>Bottles</span><strong>{run.bottles_completed}</strong></article><article><span>Cases</span><strong>{run.cases_staged}</strong></article><article><span>Rejects</span><strong>{run.rejects}</strong></article></div>
+                <div className="process-metrics"><article><span>Progress</span><strong>{run.progress}%</strong></article><article><span>Speed</span><strong>{run.speed_bpm} bpm</strong></article><article><span>Gross Filled</span><strong>{grossBottleCount}</strong></article><article><span>Rejects</span><strong>{rejectedBottleCount}</strong></article><article><span>Final Good Bottles</span><strong>{finalGoodBottleCount}</strong></article><article><span>Exact Shortfall</span><strong>{finishedGoodsShortfall}</strong></article><article><span>Cases</span><strong>{run.cases_staged}</strong></article></div>
+                {run.progress >= 100 && routePo && (
+                  <div className={`fg-reconciliation-panel ${finishedGoodsShortfall > 0 ? "short" : "balanced"}`}>
+                    <div>
+                      <small>FINISHED GOODS RECONCILIATION</small>
+                      <strong>{finalGoodBottleCount} good / {plannedBottleCount} planned</strong>
+                      <p>{finishedGoodsShortfall > 0 ? `${rejectedBottleCount} rejected bottles create an exact ${finishedGoodsShortfall}-bottle shortfall.` : "Finished-goods count matches the production order."}</p>
+                    </div>
+                    {finishedGoodsShortfall > 0 && !fgReconciliation && (
+                      <button className="button warning" onClick={() => void runAction(() => api.requestRouteChange({
+                        po_number: routePo.po_number,
+                        resource_type: "finished_goods_quantity",
+                        current_resource: String(plannedBottleCount),
+                        requested_resource: String(finalGoodBottleCount),
+                        reason: `FG reconciliation: ${finalGoodBottleCount} good bottles, ${rejectedBottleCount} rejects, exact shortfall ${finishedGoodsShortfall}`,
+                        requester: "Packaging",
+                      }), `Exact FG reconciliation sent to Office: ${finalGoodBottleCount} (-${finishedGoodsShortfall})`)}>
+                        Request Exact Office Reconciliation · {finalGoodBottleCount} (-{finishedGoodsShortfall})
+                      </button>
+                    )}
+                    {fgReconciliation && <span className={`material-status status-${fgReconciliation.status.toLowerCase()}`}>Office {fgReconciliation.status}</span>}
+                  </div>
+                )}
                 <progress max="100" value={run.progress} />
                 {run.jam_code && <div className="fault-banner"><div><strong>{run.jam_code}</strong><span>PACKAGING PLC FAULT</span></div><p>{run.fault_message}</p><small>{run.fault_diagnosed ? "Diagnosed — reset permitted" : "Diagnose before PLC reset"}</small></div>}
                 <div className="button-row">
@@ -2164,6 +2286,7 @@ export default function App() {
   function renderActiveZone() {
     if (activeZone === "command") return renderCommandCenter();
     if (activeZone === "twin") return renderDigitalTwinZone();
+    if (activeZone === "security") return renderSecurityZone();
     if (activeZone === "office") return renderOfficeZone();
     if (activeZone === "warehouse") return renderWarehouseZone();
     if (activeZone === "weighing") return renderWeighingZone();

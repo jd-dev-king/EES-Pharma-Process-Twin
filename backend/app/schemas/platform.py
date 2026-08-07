@@ -23,11 +23,13 @@ class ProductionOrderCreate(BaseModel):
     hold_tank: str = "H-301"
     packaging_line: str = "PKG-01"
     requires_premix: bool = False
+    flavor: str = "Cherry"
+    bulk_material: str = "Propylene Glycol"
 
 class ProductionOrderRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int; po_number: str; batch_number: str; product_name: str; quantity: int; status: str
-    weigh_room: str; mix_tank: str; hold_tank: str; packaging_line: str; requires_premix: bool; created_at: datetime
+    weigh_room: str; mix_tank: str; hold_tank: str; packaging_line: str; requires_premix: bool; bulk_material: str; created_at: datetime
 
 class MaterialRequirementRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

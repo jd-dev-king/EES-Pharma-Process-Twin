@@ -25,11 +25,25 @@ export interface TwinAsset {
   level?: number;
 }
 
+interface ParkingStatus {
+  available: boolean;
+  lot_code: string;
+  lot_name: string;
+  total_spaces: number;
+  occupied_spaces: number;
+  available_spaces: number;
+  employees: number;
+  visitors: number;
+  occupancy_percent: number;
+}
+
 interface DigitalTwinSceneProps {
   connected: boolean;
   assets: TwinAsset[];
   alarms: number;
   activeOrders: number;
+  parking: ParkingStatus | null;
+  onOpenParking: () => void;
   onNavigate: (zone: TwinZone) => void;
   onReturn: () => void;
 }
@@ -62,7 +76,7 @@ function stateFor(value: string): State {
   return "waiting";
 }
 
-function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, onNavigate, onReturn }: DigitalTwinSceneProps) {
+function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, parking, onOpenParking, onNavigate, onReturn }: DigitalTwinSceneProps) {
   const [camera, setCamera] = useState<CameraPreset>("overview");
   const [selectedZone, setSelectedZone] = useState<TwinZone>("mixing");
   const [labelsVisible, setLabelsVisible] = useState(true);
@@ -121,6 +135,7 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, on
         <article><span>Plant Connection</span><strong>{connected ? "ONLINE" : "OFFLINE"}</strong></article>
         <article><span>Active Orders</span><strong>{activeOrders}</strong></article>
         <article><span>Active Alarms</span><strong>{alarms}</strong></article>
+        <article><span>Parking</span><strong>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces}` : "OFFLINE"}</strong></article>
         <article><span>Selected Zone</span><strong>{selectedRoom?.label ?? "Plant"}</strong></article>
       </section>
 
@@ -133,6 +148,26 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, on
 
         <div className="twin-viewport">
           <div className="twin-sky"><span /><span /><span /></div>
+
+          <button
+            className={`parking-campus-sign ${parking?.available ? "online" : "offline"}`}
+            onClick={onOpenParking}
+            aria-label="Open Pharma Employee Parking Digital Twin"
+          >
+            <span className="parking-campus-sign-kicker">CAMPUS ACCESS</span>
+            <strong>PHARMA EMPLOYEE PARKING</strong>
+            <span className="parking-campus-sign-status">
+              {parking?.available
+                ? `${parking.occupied_spaces} / ${parking.total_spaces} occupied`
+                : "Parking Twin Offline"}
+            </span>
+            <small>
+              {parking?.available
+                ? `${parking.employees} employees · ${parking.visitors} visitors · ${parking.available_spaces} spaces free`
+                : "Open dedicated parking digital twin"}
+            </small>
+          </button>
+
           <div className="twin-scene">
             <div className="twin-floor-grid" />
             <div className="twin-main-corridor"><i /><i /><i /><i /></div>
@@ -166,6 +201,12 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, on
 
             <div className="twin-material-route route-one"><span /><span /><span /></div>
             <div className="twin-material-route route-two"><span /><span /></div>
+
+            <button className={`twin-parking-campus ${parking?.available ? "online" : "offline"}`} onClick={onOpenParking} aria-label="Open Pharma Employee Parking Digital Twin">
+              <span className="parking-campus-label"><b>PARKING</b><strong>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces}` : "OFFLINE"}</strong></span>
+              <span className="parking-campus-grid">{Array.from({ length: 24 }).map((_, index) => <i key={index} className={parking?.available && index < Math.min(24, Math.round((parking.occupancy_percent / 100) * 24)) ? "occupied" : ""} />)}</span>
+              <span className="parking-gate-arm" />
+            </button>
           </div>
         </div>
 
@@ -186,6 +227,11 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, on
             {!selectedAssets.length && <p className="empty-state">No live equipment records in this zone.</p>}
           </div>
           <ScadaOverlay asset={selectedAsset} zone={selectedZone} onOpenDepartment={onNavigate} onOpenAutomation={() => onNavigate("automation")} />
+          <div className="twin-parking-hud">
+            <div><span>Campus Access</span><strong>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces} occupied` : "Parking API offline"}</strong></div>
+            <small>{parking?.available ? `${parking.employees} employees · ${parking.visitors} visitors currently on site` : "The Process Twin remains operational independently."}</small>
+            <button className="button secondary" onClick={onOpenParking}>Open Parking Digital Twin</button>
+          </div>
           <div className="twin-hud-actions">
             <button className="button primary" onClick={() => onNavigate(selectedZone)}>Open Department</button>
             <button className="button secondary" onClick={() => onNavigate("automation")}>Open PLC</button>
