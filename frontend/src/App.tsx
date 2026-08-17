@@ -76,19 +76,32 @@ const zones: ZoneDefinition[] = [
 
 const initialPo: T.ProductionOrderPayload = {
   po_number: "PO-260742",
-  batch_number: "B-26-0813",
-  product_name: "Prednisone Oral Suspension 5 mg/5 mL",
+  batch_number: "",
+  material_number: "PC-1308",
+  product_name: "Liquid Prednisone 15 mg/5 mL",
   quantity: 4200,
   priority: "Critical",
-  destination: "Weighing Staging 01",
+  destination: "Chem Weigh Staging",
   weigh_room: "WR-01",
   mix_tank: "V-201",
   hold_tank: "H-301",
   packaging_line: "PKG-01",
   requires_premix: true,
   flavor: "Cherry",
-  bulk_material: "Propylene Glycol",
+  dye: "FD&C Red No. 33 + FD&C Red No. 40",
+  bulk_material: "Multi-Bulk Recipe",
 };
+
+const approvedFormulaVariants: T.FormulationVariant[] = [
+  { material_number: "PDFC-0813", name: "Dye Free Cherry", flavor: "Cherry", dyes: [] },
+  { material_number: "PC-1308", name: "Cherry", flavor: "Cherry", dyes: ["FD&C Red No. 33", "FD&C Red No. 40"] },
+  { material_number: "PDFS-0914", name: "Dye Free Strawberry", flavor: "Strawberry", dyes: [] },
+  { material_number: "PS-1409", name: "Strawberry", flavor: "Strawberry", dyes: ["FD&C Red No. 33", "FD&C Yellow No. 5"] },
+  { material_number: "PDFG-0715", name: "Dye Free Grape", flavor: "Grape", dyes: [] },
+  { material_number: "PG-1507", name: "Grape", flavor: "Grape", dyes: ["FD&C Blue No. 1", "FD&C Red No. 40"] },
+  { material_number: "PDFB-0616", name: "Dye Free Berry", flavor: "Berry", dyes: [] },
+  { material_number: "PB-1606", name: "Berry", flavor: "Berry", dyes: ["FD&C Red No. 40"] },
+];
 
 const initialRoute: T.SchedulerConflictPayload = {
   weigh_room: "WR-02",
@@ -98,10 +111,12 @@ const initialRoute: T.SchedulerConflictPayload = {
 };
 
 const bulkRecipeByMaterial: Record<string, { tankCode: string; quantityKg: number }> = {
-  "Propylene Glycol": { tankCode: "PG-101", quantityKg: 420 },
-  "Glycerin": { tankCode: "GLY-101", quantityKg: 400 },
-  "Sorbitol Solution": { tankCode: "SOR-101", quantityKg: 450 },
+  "Glycerin": { tankCode: "GLY-101", quantityKg: 920 },
+  "Propylene Glycol": { tankCode: "PG-101", quantityKg: 750 },
+  "Sucrose": { tankCode: "SUC-101", quantityKg: 2175 },
 };
+
+// USP Water requirement is 4,000 kg per production batch and is supplied by the qualified automatic utility feed.
 
 function asArray<TValue>(value: unknown): TValue[] {
   return Array.isArray(value) ? (value as TValue[]) : [];
@@ -127,9 +142,37 @@ export default function App() {
   const [health, setHealth] = useState<T.HealthResponse | null>(null);
   const [parkingStatus, setParkingStatus] = useState<T.ParkingStatus | null>(null);
   const [securityStatus, setSecurityStatus] = useState<T.SecurityStatus | null>(null);
+  const [formulationOptions, setFormulationOptions] = useState<T.FormulationOptions | null>(null);
+  const [rndSamples, setRndSamples] = useState<T.RnDSampleBatch[]>([]);
+  const [rndCatalog, setRndCatalog] = useState<T.RnDMaterialCatalog | null>(null);
+  const [rndFormulaName, setRndFormulaName] = useState("Development Liquid Prednisone");
+  const [rndFlavor, setRndFlavor] = useState("Cherry");
+  const [rndDye, setRndDye] = useState("None");
+  const [rndScale, setRndScale] = useState(10);
+  const [rndResult, setRndResult] = useState("Assay and appearance within development target; agitation profile acceptable.");
+  const [rndMaterialCodes, setRndMaterialCodes] = useState<string[]>(["9PHQ9Y1OLM"]);
+  const [rndBulkTanks, setRndBulkTanks] = useState<string[]>(["PG-101","GLY-101","SUC-101"]);
+  const [rndAgitationRpm, setRndAgitationRpm] = useState(120);
+  const [rndAgitationMinutes, setRndAgitationMinutes] = useState(10);
+  const [rndPremixRpm, setRndPremixRpm] = useState(850);
+  const [rndPremixMinutes, setRndPremixMinutes] = useState(5);
+  const [rndVacuum, setRndVacuum] = useState(false);
+  const [formulaVariants, setFormulaVariants] = useState<T.FormulationVariant[]>(approvedFormulaVariants);
   const [roles, setRoles] = useState<string[]>([]);
   const [productionOrders, setProductionOrders] = useState<T.ProductionOrder[]>([]);
+  const [campaigns, setCampaigns] = useState<T.ProductionCampaign[]>([]);
   const [warehouseQueue, setWarehouseQueue] = useState<T.WarehouseTransferOrder[]>([]);
+  const [materialPRs, setMaterialPRs] = useState<T.MaterialPR[]>([]);
+  const [materialPositions, setMaterialPositions] = useState<T.MaterialPosition[]>([]);
+  const [materialMovements, setMaterialMovements] = useState<T.MaterialMovement[]>([]);
+  const [activeWeighCampaignId, setActiveWeighCampaignId] = useState("");
+  const [campaignPlantInventory, setCampaignPlantInventory] = useState<T.CampaignPlantInventory | null>(null);
+  const [prDraftLines, setPrDraftLines] = useState<T.MaterialPRLineDraft[]>([]);
+  const [separationReason, setSeparationReason] = useState("Scheduling/resource change requested by Weighing");
+  const [weighMaterialSearch, setWeighMaterialSearch] = useState("");
+  const [weighInventoryMode, setWeighInventoryMode] = useState<"required"|"substitutes"|"full">("required");
+  const [selectedRequirementCode, setSelectedRequirementCode] = useState("");
+  const [campaignWeighTask, setCampaignWeighTask] = useState<any | null>(null);
   const [events, setEvents] = useState<T.PlatformEvent[]>([]);
   const [notifications, setNotifications] = useState<T.NotificationRecord[]>([]);
   const [inventory, setInventory] = useState<T.InventoryLot[]>([]);
@@ -142,6 +185,7 @@ export default function App() {
   const [mixBatches, setMixBatches] = useState<T.MixBatch[]>([]);
   const [routeChanges, setRouteChanges] = useState<T.RouteChangeRequest[]>([]);
   const [qaBulkTasks, setQaBulkTasks] = useState<T.QABulkTask[]>([]);
+  const [packagingComponents, setPackagingComponents] = useState<T.PackagingComponent[]>([]);
   const [packagingLines, setPackagingLines] = useState<T.PackagingLine[]>([]);
   const [packagingQueue, setPackagingQueue] = useState<T.ProductionOrder[]>([]);
   const [packagingRuns, setPackagingRuns] = useState<T.PackagingRun[]>([]);
@@ -160,6 +204,9 @@ export default function App() {
   const [batchReviews, setBatchReviews] = useState<T.BatchReview[]>([]);
   const [auditTrail, setAuditTrail] = useState<T.AuditTrailEntry[]>([]);
   const [ebrDetail, setEbrDetail] = useState<T.EBRBatchDetail | null>(null);
+  const [mesRecord, setMesRecord] = useState<T.MESBatchRecord | null>(null);
+  const [compliancePo, setCompliancePo] = useState("");
+  const [complianceCipId, setComplianceCipId] = useState("");
   const [ebrSearch, setEbrSearch] = useState("");
   const [reviewer, setReviewer] = useState("QA Reviewer");
   const [reviewSignature, setReviewSignature] = useState("Q. Reviewer");
@@ -179,9 +226,15 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState("WR-01");
   const [selectedTicket, setSelectedTicket] = useState("");
   const [selectedMixRoom, setSelectedMixRoom] = useState("MR-01");
+  const [selectedMixPo, setSelectedMixPo] = useState("");
   const [selectedMixBatch, setSelectedMixBatch] = useState("");
   const [mixWorkspace, setMixWorkspace] = useState<T.MixWorkspace | null>(null);
+  // HMI visibility is an operator-presence state, not an equipment-state flag.
+  // Active batches may continue/recover in the background, but the Batch HMI
+  // stays closed until the operator explicitly opens/resumes the mix room.
+  const [mixRoomEntered, setMixRoomEntered] = useState(false);
   const [selectedPackagingLine, setSelectedPackagingLine] = useState("PKG-01");
+  const [selectedPackagingPo, setSelectedPackagingPo] = useState("");
   const [selectedPackagingRun, setSelectedPackagingRun] = useState("");
   const [packagingWorkspace, setPackagingWorkspace] = useState<T.PackagingWorkspace | null>(null);
   const [packagingOperator, setPackagingOperator] = useState("Packaging Operator");
@@ -200,16 +253,20 @@ export default function App() {
   const [sealNumber, setSealNumber] = useState("SEAL-260742");
 
   const [poForm, setPoForm] = useState(initialPo);
+  const [nextPo, setNextPo] = useState("Auto");
   const [route, setRoute] = useState(initialRoute);
   const [routeResult, setRouteResult] = useState<T.SchedulerConflictResponse | null>(null);
   const [role, setRole] = useState("Production Scheduler");
   const [difficulty, setDifficulty] = useState("Beginner");
   const [session, setSession] = useState<T.TrainingSession | null>(null);
+  const [campaignSize, setCampaignSize] = useState<1 | 2 | 3 | 4>(1);
   const [weighOperator, setWeighOperator] = useState("Weigh Technician");
+  const [selectedScale, setSelectedScale] = useState("Bench Scale");
   const [barcode, setBarcode] = useState("");
   const [actualWeight, setActualWeight] = useState("");
   const [signature, setSignature] = useState("J. WeighTech");
   const [mixOperator, setMixOperator] = useState("Process Engineer");
+  const [mixMaterialBarcode, setMixMaterialBarcode] = useState("");
   const [requestedHoldTank, setRequestedHoldTank] = useState("H-302");
   const [requestedWeighRoom, setRequestedWeighRoom] = useState("WR-02");
   const [requestedMixTank, setRequestedMixTank] = useState("V-202");
@@ -220,6 +277,10 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api.nextPo().then((value) => setNextPo(value.po_number)).catch(() => setNextPo("Auto"));
+  }, []);
 
   const refresh = useCallback(async () => {
     if (refreshInFlight.current) return;
@@ -246,9 +307,17 @@ try {
       const [
         parkingData,
         securityData,
+        formulationData,
+        rndSampleData,
+        rndCatalogData,
+        formulaVariantData,
         roleData,
         poData,
+        campaignData,
         queueData,
+        materialPRData,
+        materialPositionData,
+        materialMovementData,
         eventData,
         notificationData,
         inventoryData,
@@ -261,6 +330,7 @@ try {
         mixBatchData,
         routeChangeData,
         qaTaskData,
+        packagingComponentData,
         packagingLineData,
         packagingQueueData,
         packagingRunData,
@@ -268,9 +338,17 @@ try {
       ] = await Promise.all([
         api.parkingStatus().catch(() => null),
         api.securityStatus().catch(() => null),
+        api.formulationOptions().catch(() => null),
+        api.rndSampleBatches().catch(() => []),
+        api.rndMaterialCatalog().catch(() => null),
+        api.formulationVariants().catch(() => ({variants: approvedFormulaVariants})),
         api.trainingRoles(),
         api.productionOrders(),
+        api.campaigns(),
         api.warehouseQueue(),
+        api.materialPRs(),
+        api.materialPositions(),
+        api.materialMovements(),
         api.events(),
         api.notifications(),
         api.inventory(),
@@ -283,6 +361,7 @@ try {
         api.mixBatches(),
         api.routeChanges(),
         api.qaBulkTasks(),
+        api.packagingComponents(),
         api.packagingLines(),
         api.packagingQueue(),
         api.packagingRuns(),
@@ -294,9 +373,17 @@ try {
 
       setParkingStatus((parkingData as T.ParkingStatus | null) ?? null);
       setSecurityStatus((securityData as T.SecurityStatus | null) ?? null);
+      setFormulationOptions((formulationData as T.FormulationOptions | null) ?? null);
+      setRndSamples(asArray<T.RnDSampleBatch>(rndSampleData));
+      setRndCatalog(rndCatalogData);
+      setFormulaVariants(asArray<T.FormulationVariant>(formulaVariantData?.variants).length ? asArray<T.FormulationVariant>(formulaVariantData?.variants) : approvedFormulaVariants);
       setRoles(asArray<string>(roleData));
       setProductionOrders(normalizedPos);
+      setCampaigns(asArray<T.ProductionCampaign>(campaignData));
       setWarehouseQueue(normalizedQueue);
+      setMaterialPRs(asArray<T.MaterialPR>(materialPRData));
+      setMaterialPositions(asArray<T.MaterialPosition>(materialPositionData));
+      setMaterialMovements(asArray<T.MaterialMovement>(materialMovementData));
       setEvents(asArray<T.PlatformEvent>(eventData));
       setNotifications(asArray<T.NotificationRecord>(notificationData));
       setInventory(asArray<T.InventoryLot>(inventoryData));
@@ -309,6 +396,7 @@ try {
       setMixBatches(asArray<T.MixBatch>(mixBatchData));
       setRouteChanges(asArray<T.RouteChangeRequest>(routeChangeData));
       setQaBulkTasks(asArray<T.QABulkTask>(qaTaskData));
+      setPackagingComponents(asArray<T.PackagingComponent>(packagingComponentData));
       setPackagingLines(asArray<T.PackagingLine>(packagingLineData));
       setPackagingQueue(asArray<T.ProductionOrder>(packagingQueueData));
       setPackagingRuns(asArray<T.PackagingRun>(packagingRunData));
@@ -410,6 +498,41 @@ try {
     }, 850);
     return () => window.clearInterval(timer);
   }, [packagingWorkspace?.run.status, packagingOperator, selectedPackagingRun]);
+
+  useEffect(() => {
+    if (activeZone !== "packaging" || loading || busy) return;
+
+    if (
+      packagingWorkspace?.run &&
+      !["Complete", "Released"].includes(packagingWorkspace.run.status)
+    ) {
+      return;
+    }
+
+    const lineWithActivePo =
+      packagingLines.find(
+        (line) =>
+          line.line_code === selectedPackagingLine && Boolean(line.active_po),
+      ) ??
+      packagingLines.find((line) => Boolean(line.active_po));
+
+    if (!lineWithActivePo?.active_po) return;
+
+    const existing = activePackagingRunForLine(
+      lineWithActivePo.line_code,
+      lineWithActivePo.active_po,
+    );
+    if (!existing) return;
+
+    void resumePackagingLineWorkflow(
+      lineWithActivePo.line_code,
+      lineWithActivePo.active_po,
+      { silent: true },
+    ).catch((resumeError) => {
+      setError(errorMessage(resumeError));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeZone, loading, packagingLines, packagingRuns]);
 
   useEffect(() => {
     if (!replayPlaying) return undefined;
@@ -526,10 +649,14 @@ try {
 
   async function registerProductionOrder(event: FormEvent) {
     event.preventDefault();
-    await runAction(
-      () => api.registerProductionOrder(poForm),
-      "PO registered and Warehouse notified.",
-    );
+    setBusy(true); setError(null);
+    try {
+      const created = await api.createProductionRun(poForm, campaignSize);
+      const poNumbers = created.production_orders.map((po) => po.po_number).join(", ");
+      setNotice(`${created.campaign.campaign_id} created with ${created.production_orders.length} PO${created.production_orders.length === 1 ? "" : "s"}: ${poNumbers}. Warehouse notified.`);
+      const next = await api.nextPo(); setNextPo(next.po_number);
+      await refresh();
+    } catch (actionError) { setError(errorMessage(actionError)); } finally { setBusy(false); }
   }
 
   async function loadWorkspace(poNumber: string) {
@@ -546,6 +673,100 @@ try {
     setWeighWorkspace(await api.weighTicketWorkspace(ticketNumber));
   }
 
+  function campaignContainsPo(campaign: T.ProductionCampaign, poNumber: string) {
+    const raw = campaign.po_numbers as unknown;
+    if (Array.isArray(raw)) {
+      return raw.map((value) => String(value).trim()).includes(poNumber);
+    }
+    return String(raw ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .includes(poNumber);
+  }
+
+  function activeRoomTicket(
+    roomCode: string,
+    activePo: string | null | undefined,
+    tickets: T.WeighTicket[] = weighTickets,
+  ) {
+    if (!activePo) return undefined;
+    return tickets.find(
+      (ticket) =>
+        ticket.po_number === activePo &&
+        ticket.room_code === roomCode &&
+        ticket.status !== "Completed",
+    );
+  }
+
+  async function resumeRoomWorkflow(
+    roomCode: string,
+    activePo: string,
+    options: { silent?: boolean } = {},
+  ) {
+    const campaign = campaigns.find((item) => campaignContainsPo(item, activePo));
+    const ticket = activeRoomTicket(roomCode, activePo);
+
+    setSelectedRoom(roomCode);
+
+    if (campaign) {
+      setActiveWeighCampaignId(campaign.campaign_id);
+
+      // Reconciliation/PR is already complete once the campaign is physically
+      // bent into the white-zone room. Reloading the inventory view is useful
+      // context only; it must not gate recovery of the existing weigh task.
+      try {
+        setCampaignPlantInventory(await api.campaignPlantInventory(campaign.campaign_id));
+      } catch {
+        // Room/ticket recovery remains authoritative.
+      }
+
+      try {
+        const synced = await api.syncCampaignWeighing(
+          campaign.campaign_id,
+          roomCode,
+          weighOperator,
+        );
+        setCampaignWeighTask(synced?.task ?? null);
+
+        if (synced?.ticket?.ticket_number) {
+          setSelectedTicket(synced.ticket.ticket_number);
+          setWeighWorkspace(
+            synced.workspace ??
+              (await api.weighTicketWorkspace(synced.ticket.ticket_number)),
+          );
+          if (!options.silent) {
+            setNotice(`Resumed ${roomCode} at ${synced.ticket.ticket_number}`);
+          }
+          return;
+        }
+      } catch (syncError) {
+        // If campaign synchronization is temporarily unavailable, the
+        // persisted room ticket can still be recovered below.
+        if (!ticket) throw syncError;
+      }
+    }
+
+    if (ticket) {
+      setSelectedTicket(ticket.ticket_number);
+      setWeighWorkspace(await api.weighTicketWorkspace(ticket.ticket_number));
+      if (!options.silent) {
+        setNotice(`Resumed ${roomCode} at ${ticket.ticket_number}`);
+      }
+      return;
+    }
+
+    throw new Error(`${roomCode} has ${activePo} assigned but no resumable weigh ticket was found`);
+  }
+
+  async function resumeSelectedRoomWorkflow() {
+    const room = weighRooms.find((item) => item.room_code === selectedRoom);
+    if (!room?.active_po) {
+      throw new Error(`${selectedRoom} has no active PO to resume`);
+    }
+    await resumeRoomWorkflow(selectedRoom, room.active_po);
+  }
+
   async function bendIntoSelectedRoom() {
     const room = weighRooms.find((item) => item.room_code === selectedRoom);
     const existingBentOrder = bentOrders.find(
@@ -558,15 +779,12 @@ try {
       return;
     }
 
-    const roomSuffix = selectedRoom.split("-").pop();
-    const order = deliveredOrders.find(
-      (item) =>
-        !item.destination ||
-        item.destination === "Weighing Staging" ||
-        item.destination.endsWith(roomSuffix ?? ""),
-    );
+    const order = deliveredOrders.find((item) => {
+      const scheduledPo = productionOrders.find((po) => po.po_number === item.po_number);
+      return scheduledPo?.weigh_room === selectedRoom;
+    });
     if (!order) {
-      throw new Error(`No delivered cart is staged for ${selectedRoom}`);
+      throw new Error(`No delivered cart in Chem Weigh Staging is scheduled for ${selectedRoom}`);
     }
     await api.bendIntoWeighRoom(order.po_number, selectedRoom, weighOperator);
   }
@@ -600,16 +818,91 @@ try {
   async function loadMixWorkspace(batchId: string) {
     setSelectedMixBatch(batchId);
     setMixWorkspace(await api.mixWorkspace(batchId));
+    setMixRoomEntered(true);
+  }
+
+  function activeMixBatchForRoom(roomCode: string, activePo?: string | null) {
+    return mixBatches.find(
+      (item) =>
+        item.room_code === roomCode &&
+        (!activePo || item.po_number === activePo) &&
+        item.status !== "Complete",
+    );
+  }
+
+  async function resumeMixRoomWorkflow(
+    roomCode: string,
+    activePo: string,
+    options: { silent?: boolean } = {},
+  ) {
+    const existing = activeMixBatchForRoom(roomCode, activePo);
+    if (!existing) {
+      throw new Error(`${roomCode} is assigned to ${activePo}, but no active mix batch was found`);
+    }
+
+    setSelectedMixRoom(roomCode);
+    setSelectedMixBatch(existing.batch_id);
+    setMixWorkspace(await api.mixWorkspace(existing.batch_id));
+
+    if (!options.silent) {
+      setMixRoomEntered(true);
+      setNotice(`Resumed ${roomCode} batch ${existing.batch_number}`);
+    }
   }
 
   async function openMixBatch() {
-    const poNumber = mixQueue[0]?.po_number;
-    if (!poNumber) {
-      throw new Error("No completed weighing record is available for mixing");
+    const selectedRoomAsset = mixRooms.find((room) => room.room_code === selectedMixRoom);
+
+    // Once a PO is already physically assigned to a white-zone mix room, the
+    // room/batch is the authoritative recovery point. Do not require the PO to
+    // reappear in the completed-weighing queue after refresh/navigation.
+    if (!selectedMixPo && selectedRoomAsset?.active_po) {
+      const existing = activeMixBatchForRoom(
+        selectedMixRoom,
+        selectedRoomAsset.active_po,
+      );
+      if (existing) {
+        await resumeMixRoomWorkflow(selectedMixRoom, selectedRoomAsset.active_po);
+        return;
+      }
     }
-    const batch = await api.openMixBatch(poNumber, selectedMixRoom, mixOperator);
+
+    const poNumber = selectedMixPo;
+    if (!poNumber) {
+      throw new Error("Select a PO from the Mixing Work Queue before opening a batch");
+    }
+    const selectedPo = mixQueue.find((item) => item.po_number === poNumber);
+    if (!selectedPo) {
+      throw new Error(`${poNumber} is no longer available in the Mixing Work Queue`);
+    }
+    const scheduledRoom = mixRooms.find((room) => room.tank_code === selectedPo.mix_tank);
+    if (!scheduledRoom) {
+      throw new Error(`No mix room is configured for scheduled tank ${selectedPo.mix_tank}`);
+    }
+    if (scheduledRoom.room_code !== selectedMixRoom) {
+      setSelectedMixRoom(scheduledRoom.room_code);
+    }
+
+    const batch = await api.openMixBatch(poNumber, scheduledRoom.room_code, mixOperator);
     setSelectedMixBatch(batch.batch_id);
     setMixWorkspace(await api.mixWorkspace(batch.batch_id));
+    setMixRoomEntered(true);
+  }
+
+  async function syncCampaignWeighSequence() {
+    if (!activeWeighCampaignId) return;
+    const synced = await api.syncCampaignWeighing(activeWeighCampaignId, selectedRoom, weighOperator);
+    const task = synced?.task ?? null;
+    setCampaignWeighTask(task);
+
+    if (!synced?.ticket?.ticket_number) {
+      setSelectedTicket("");
+      setWeighWorkspace(null);
+      return;
+    }
+
+    setSelectedTicket(synced.ticket.ticket_number);
+    setWeighWorkspace(synced.workspace ?? await api.weighTicketWorkspace(synced.ticket.ticket_number));
   }
 
   async function runWeighAction(
@@ -617,12 +910,75 @@ try {
     message: string,
     options: { clearBarcode?: boolean; clearWeight?: boolean } = {},
   ) {
-    await runAction(action, message);
-    if (selectedTicket) {
-      setWeighWorkspace(await api.weighTicketWorkspace(selectedTicket));
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      await action();
+      await refresh();
+
+      if (activeWeighCampaignId) {
+        // Campaign sequencing is authoritative. Keep the current HMI mounted
+        // while asking the backend for the exact next PO/material ticket, then
+        // replace the workspace atomically. Blank/unmount transitions here
+        // caused the Scale HMI to disappear between tare/scan/weigh steps.
+        const synced = await api.syncCampaignWeighing(
+          activeWeighCampaignId,
+          selectedRoom,
+          weighOperator,
+        );
+
+        const task = synced?.task ?? null;
+        setCampaignWeighTask(task);
+
+        if (synced?.ticket?.ticket_number) {
+          setSelectedTicket(synced.ticket.ticket_number);
+          setWeighWorkspace(
+            synced.workspace ??
+              (await api.weighTicketWorkspace(synced.ticket.ticket_number)),
+          );
+        } else {
+          setSelectedTicket("");
+          setWeighWorkspace(null);
+        }
+      } else if (selectedTicket) {
+        setWeighWorkspace(await api.weighTicketWorkspace(selectedTicket));
+      }
+
+      if (options.clearBarcode) setBarcode("");
+      if (options.clearWeight) setActualWeight("");
+      setNotice(message);
+    } catch (actionError) {
+      // Surface the exact sequencing/sync failure instead of silently leaving
+      // the previous PO on the HMI.
+      setError(errorMessage(actionError));
+      if (activeWeighCampaignId) {
+        try {
+          const task = await api.campaignWeighSequence(activeWeighCampaignId);
+          setCampaignWeighTask(task);
+        } catch {
+          // Preserve the original error.
+        }
+      }
+    } finally {
+      setBusy(false);
     }
-    if (options.clearBarcode) setBarcode("");
-    if (options.clearWeight) setActualWeight("");
+  }
+
+  async function resumeCurrentCampaignWeighTask() {
+    if (!activeWeighCampaignId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // Preserve the current HMI while the canonical room/campaign task is
+      // reloaded. The workspace is replaced only after the backend responds.
+      await syncCampaignWeighSequence();
+    } catch (syncError) {
+      setError(errorMessage(syncError));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runMixAction(action: () => Promise<unknown>, message: string) {
@@ -632,15 +988,91 @@ try {
     }
   }
 
+  async function scanMixMaterialBarcode(valueOverride?: string) {
+    if (!selectedMixBatch) throw new Error("Open or resume a mix batch first");
+    const value=(valueOverride ?? mixMaterialBarcode).trim();
+    if (!value) throw new Error("Scan or select the current material");
+
+    await runAction(
+      () =>
+        api.mixPhaseAction(
+          selectedMixBatch,
+          `scan-barcode-${encodeURIComponent(value)}`,
+          mixOperator,
+        ),
+      "Current manual-add material verified",
+    );
+
+    setMixMaterialBarcode("");
+    setMixWorkspace(await api.mixWorkspace(selectedMixBatch));
+  }
+
   async function loadPackagingWorkspace(runId: string) {
     setSelectedPackagingRun(runId);
     setPackagingWorkspace(await api.packagingWorkspace(runId));
   }
 
+  function activePackagingRunForLine(lineCode: string, activePo?: string | null) {
+    return packagingRuns.find(
+      (item) =>
+        item.line_code === lineCode &&
+        (!activePo || item.po_number === activePo) &&
+        !["Complete", "Released"].includes(item.status),
+    );
+  }
+
+  async function resumePackagingLineWorkflow(
+    lineCode: string,
+    activePo: string,
+    options: { silent?: boolean } = {},
+  ) {
+    const existing = activePackagingRunForLine(lineCode, activePo);
+    if (!existing) {
+      throw new Error(`${lineCode} is assigned to ${activePo}, but no active packaging run was found`);
+    }
+
+    setSelectedPackagingLine(lineCode);
+    setSelectedPackagingRun(existing.run_id);
+    setPackagingWorkspace(await api.packagingWorkspace(existing.run_id));
+
+    if (!options.silent) {
+      setNotice(`Resumed ${lineCode} run for ${activePo}`);
+    }
+  }
+
   async function openPackagingRun() {
-    const po = packagingQueue[0];
-    if (!po) throw new Error("No QA-released bulk is ready for Packaging");
-    const run = await api.openPackagingRun(po.po_number, selectedPackagingLine, packagingOperator);
+    const selectedLineAsset = packagingLines.find(
+      (line) => line.line_code === selectedPackagingLine,
+    );
+
+    if (!selectedPackagingPo && selectedLineAsset?.active_po) {
+      const existing = activePackagingRunForLine(
+        selectedPackagingLine,
+        selectedLineAsset.active_po,
+      );
+      if (existing) {
+        await resumePackagingLineWorkflow(
+          selectedPackagingLine,
+          selectedLineAsset.active_po,
+        );
+        return;
+      }
+    }
+
+    const po = packagingQueue.find((item) => item.po_number === selectedPackagingPo);
+    if (!po) throw new Error("Select a PO from the Packaging Queue before opening a run");
+
+    const scheduledLine = packagingLines.find((line) => line.line_code === po.packaging_line);
+    if (!scheduledLine) throw new Error(`Scheduled packaging line ${po.packaging_line} is not configured`);
+    if (scheduledLine.line_code !== selectedPackagingLine) {
+      setSelectedPackagingLine(scheduledLine.line_code);
+    }
+
+    const run = await api.openPackagingRun(
+      po.po_number,
+      scheduledLine.line_code,
+      packagingOperator,
+    );
     setSelectedPackagingRun(run.run_id);
     setPackagingWorkspace(await api.packagingWorkspace(run.run_id));
   }
@@ -652,7 +1084,76 @@ try {
     setPackagingRuns(asArray<T.PackagingRun>(await api.packagingRuns()));
   }
 
+  useEffect(() => {
+    if (activeZone !== "weighing" || loading || busy) return;
+
+    // If an HMI is already loaded, leave it mounted. This prevents normal
+    // refreshes and React state updates from reconstructing the scale card.
+    if (weighWorkspace?.ticket && weighWorkspace.ticket.status !== "Completed") {
+      return;
+    }
+
+    const roomWithActivePo =
+      weighRooms.find((room) => room.room_code === selectedRoom && room.active_po) ??
+      weighRooms.find((room) => Boolean(room.active_po));
+
+    if (!roomWithActivePo?.active_po) return;
+
+    const ticket = activeRoomTicket(
+      roomWithActivePo.room_code,
+      roomWithActivePo.active_po,
+      weighTickets,
+    );
+    if (!ticket) return;
+
+    void resumeRoomWorkflow(
+      roomWithActivePo.room_code,
+      roomWithActivePo.active_po,
+      { silent: true },
+    ).catch((resumeError) => {
+      setError(errorMessage(resumeError));
+    });
+    // Recovery is intentionally driven by the persisted room/ticket state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeZone, loading, weighRooms, weighTickets]);
+
+  useEffect(() => {
+    if (activeZone !== "mixing" || loading || busy) return;
+
+    // Keep an already-open batch HMI mounted. Browser refresh/navigation can
+    // reconstruct it from persisted room + MixBatch state below.
+    if (mixWorkspace?.batch && mixWorkspace.batch.status !== "Complete") {
+      return;
+    }
+
+    const roomWithActivePo =
+      mixRooms.find(
+        (room) => room.room_code === selectedMixRoom && Boolean(room.active_po),
+      ) ??
+      mixRooms.find((room) => Boolean(room.active_po));
+
+    if (!roomWithActivePo?.active_po) return;
+
+    const existing = activeMixBatchForRoom(
+      roomWithActivePo.room_code,
+      roomWithActivePo.active_po,
+    );
+    if (!existing) return;
+
+    void resumeMixRoomWorkflow(
+      roomWithActivePo.room_code,
+      roomWithActivePo.active_po,
+      { silent: true },
+    ).catch((resumeError) => {
+      setError(errorMessage(resumeError));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeZone, loading, mixRooms, mixBatches]);
+
   function navigateTo(zone: ZoneId) {
+    if (zone !== "mixing") {
+      setMixRoomEntered(false);
+    }
     setActiveZone(zone);
     setMobileNavOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -790,14 +1291,15 @@ try {
         </div>
 
         <div className="zone-columns">
-          <SectionCard title="Register Production Order" eyebrow="Office Planning">
+          <SectionCard title="Register Production Run" eyebrow="Office Planning">
             <form onSubmit={registerProductionOrder} className="form-grid">
-              <label>PO<input value={poForm.po_number} onChange={(event) => setPoForm({ ...poForm, po_number: event.target.value })} /></label>
-              <label>Batch<input value={poForm.batch_number} onChange={(event) => setPoForm({ ...poForm, batch_number: event.target.value })} /></label>
+              <label>Next PO<input value={nextPo} readOnly /></label>
+              <label>Approved Material<select value={poForm.material_number} onChange={(event) => { const material_number=event.target.value; const v=formulaVariants.find(x=>x.material_number===material_number)!; setPoForm({ ...poForm, material_number, flavor:v.flavor, dye:v.dyes.length?v.dyes.join(" + "):"None", requires_premix:v.dyes.length>0 }); }}>{formulaVariants.map(v => <option key={v.material_number} value={v.material_number}>{v.material_number} · {v.name}</option>)}</select></label>
+              <label>Number of Batches / POs<select value={campaignSize} onChange={(event) => setCampaignSize(Number(event.target.value) as 1 | 2 | 3 | 4)}><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option></select></label>
               <label className="wide">Product<input value={poForm.product_name} onChange={(event) => setPoForm({ ...poForm, product_name: event.target.value })} /></label>
-              <label>Flavor<select value={poForm.flavor} onChange={(event) => setPoForm({ ...poForm, flavor: event.target.value })}><option>Unflavored</option><option>Cherry</option><option>Orange</option><option>Lemon</option><option>Berry</option></select></label>
-              <label>Bulk Excipient<select value={poForm.bulk_material} onChange={(event) => setPoForm({ ...poForm, bulk_material: event.target.value })}><option>Propylene Glycol</option><option>Glycerin</option><option>Sorbitol Solution</option></select></label>
-              <label>Bulk Water<input value="Purified Water (fixed recipe bulk)" readOnly /></label>
+              <label>Locked Flavor<input value={poForm.flavor} readOnly /></label>
+              <label>Locked Dye Recipe<input value={poForm.dye} readOnly /></label>
+              <label className="wide">Bulk Recipe<input value="Water → Glycerin + PPG → Sucrose (automatic gated adds)" readOnly /></label>
               <label>Quantity<input type="number" value={poForm.quantity} onChange={(event) => setPoForm({ ...poForm, quantity: Number(event.target.value) })} /></label>
               <label>Priority<select value={poForm.priority} onChange={(event) => setPoForm({ ...poForm, priority: event.target.value })}><option>Critical</option><option>High</option><option>Normal</option><option>Low</option></select></label>
               <label className="wide">Destination<input value={poForm.destination} onChange={(event) => setPoForm({ ...poForm, destination: event.target.value })} /></label>
@@ -805,8 +1307,8 @@ try {
               <label>Mix Tank<select value={poForm.mix_tank} onChange={(event) => setPoForm({ ...poForm, mix_tank: event.target.value })}><option>V-201</option><option>V-202</option></select></label>
               <label>Hold Tank<select value={poForm.hold_tank} onChange={(event) => setPoForm({ ...poForm, hold_tank: event.target.value })}><option>H-301</option><option>H-302</option></select></label>
               <label>Packaging Line<select value={poForm.packaging_line} onChange={(event) => setPoForm({ ...poForm, packaging_line: event.target.value })}><option>PKG-01</option><option>PKG-02</option></select></label>
-              <label className="wide checkbox-field"><input type="checkbox" checked={poForm.requires_premix} onChange={(event) => setPoForm({ ...poForm, requires_premix: event.target.checked })} /> Dye formula requires premix</label>
-              <button className="button primary wide" disabled={busy}>Register PO</button>
+              <label className="wide checkbox-field"><input type="checkbox" checked={poForm.requires_premix} readOnly /> Dye premix locked by approved material recipe</label>
+              <button className="button primary wide" disabled={busy}>Generate Production Run</button>
             </form>
           </SectionCard>
 
@@ -932,6 +1434,33 @@ try {
                   </tbody>
                 </table>
               </div>
+              {(() => {
+                const bulkCodes = new Set(["059QF0KO0R","PDC6A3C0OX","6DC9Q167V3","C151H8M554"]);
+                const bulks = asArray<T.MaterialRequirement>(workspace.requirements).filter((item) => bulkCodes.has(item.material_code));
+                if (!bulks.length) return null;
+                return (
+                  <div className="route-request-panel" style={{marginTop: "16px"}}>
+                    <div className="approval-card__header">
+                      <strong>Bulk Materials on PO</strong>
+                      <span>Direct bulk system · Not sent to Weighing</span>
+                    </div>
+                    <div className="table-wrap">
+                      <table>
+                        <thead><tr><th>Bulk Material</th><th>PO Requirement</th><th>Execution Path</th></tr></thead>
+                        <tbody>
+                          {bulks.map((item) => (
+                            <tr key={item.material_code}>
+                              <td>{item.material_name}<small className="subtext">{item.material_code}</small></td>
+                              <td>{item.required_quantity} {item.unit}</td>
+                              <td>Truck Unload → Bulk Tank → Mix Tank</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           ) : <p className="empty-state">Register a PO to populate material requirements.</p>}
         </SectionCard>
@@ -1250,17 +1779,26 @@ try {
                     );
                   })()}
                   {(() => {
-                    const substitutionCandidate = asArray<T.MaterialComparison>(
-                      workspace?.comparison,
-                    ).find(
+                    const comparison = asArray<T.MaterialComparison>(workspace?.comparison);
+                    const substitutionCandidate = comparison.find(
+                      (item) =>
+                        item.status !== "Ready" &&
+                        Boolean(item.recommended_substitute_lot),
+                    );
+                    const alternateLotCandidate = comparison.find(
                       (item) =>
                         item.status !== "Ready" &&
                         Boolean(item.recommended_lot),
                     );
 
-                    if (!substitutionCandidate?.recommended_lot) {
-                      return null;
-                    }
+                    const candidate = substitutionCandidate ?? alternateLotCandidate;
+                    const requestedLot = substitutionCandidate?.recommended_substitute_lot ?? alternateLotCandidate?.recommended_lot;
+                    if (!candidate || !requestedLot) return null;
+
+                    const substituteName = substitutionCandidate?.recommended_substitute_material_name;
+                    const label = substituteName
+                      ? `Request Substitute: ${substituteName} · ${requestedLot}`
+                      : `Request Alternate Lot: ${requestedLot}`;
 
                     return (
                       <button
@@ -1270,71 +1808,28 @@ try {
                             () =>
                               api.requestSubstitution(
                                 activeTo.po_number,
-                                substitutionCandidate.material_code,
-                                substitutionCandidate.recommended_lot as string,
+                                candidate.material_code,
+                                requestedLot,
                               ),
-                            `Office notified: request ${substitutionCandidate.recommended_lot}`,
+                            substituteName
+                              ? `Office notified: substitute ${substituteName} requested`
+                              : `Office notified: alternate lot ${requestedLot} requested`,
                           )
                         }
                       >
-                        Notify Office: Request {substitutionCandidate.recommended_lot}
+                        {label}
                       </button>
                     );
                   })()}
-                  {(() => {
-                    const bottleShortage = asArray<T.MaterialComparison>(workspace?.comparison).find(
-                      (item) => item.material_code === "BOTTLE-120" && item.status === "Shortage",
-                    );
-                    if (!bottleShortage) return null;
-                    const maximumQuantity = Math.max(1, Math.floor(bottleShortage.available_quantity));
-                    return (
-                      <div className="quantity-change-panel">
-                        <p className="warning-text">
-                          Available bottles support up to {maximumQuantity} finished units. Request Office approval to revise the PO quantity.
-                        </p>
-                        <div className="form-grid compact">
-                          <label>Requested finished quantity
-                            <input
-                              type="number"
-                              min="1"
-                              max={maximumQuantity}
-                              placeholder={String(maximumQuantity)}
-                              value={requestedProductionQuantity}
-                              onChange={(event) => setRequestedProductionQuantity(event.target.value)}
-                            />
-                          </label>
-                          <label>Reason
-                            <input
-                              value={resourceChangeReason}
-                              onChange={(event) => setResourceChangeReason(event.target.value)}
-                            />
-                          </label>
-                        </div>
-                        <button
-                          className="button warning"
-                          disabled={!requestedProductionQuantity || Number(requestedProductionQuantity) <= 0 || Number(requestedProductionQuantity) > maximumQuantity}
-                          onClick={() =>
-                            void runAction(
-                              () => api.requestRouteChange({
-                                po_number: activeTo.po_number,
-                                resource_type: "production_quantity",
-                                current_resource: String(workspace?.production_order.quantity ?? ""),
-                                requested_resource: requestedProductionQuantity,
-                                reason: resourceChangeReason || `Packaging material shortage; revise quantity to ${requestedProductionQuantity}`,
-                                requester: "Warehouse",
-                              }),
-                              "Quantity revision request sent to Office",
-                            )
-                          }
-                        >
-                          Request Different Quantity
-                        </button>
-                      </div>
-                    );
-                  })()}
-                </>
+               </>
               ) : <p className="empty-state">Select a transfer order.</p>}
             </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Live Material Position" eyebrow="Warehouse → Vestibule → Chem Weigh → Kitting">
+          <div className="inventory-grid">
+            {materialPositions.map((pos) => <article key={pos.container_id} className="inventory-card"><div><strong>{pos.material_name}</strong><span>{pos.hazard_class === "Hazardous" ? "⚠ HAZARDOUS" : pos.status}</span></div><p>{pos.lot_number} · {pos.container_id}</p><dl><div><dt>Quantity</dt><dd>{pos.quantity} {pos.unit}</dd></div><div><dt>Live Location</dt><dd>{pos.location_code}</dd></div><div><dt>PO / PR</dt><dd>{pos.po_number ?? "Staging stock"} · {pos.pr_number ?? "—"}</dd></div></dl></article>)}
           </div>
         </SectionCard>
 
@@ -1351,6 +1846,43 @@ try {
         </SectionCard>
       </div>
     );
+  }
+
+  function mergeLiveStagingPositions(rows: T.MaterialPosition[]) {
+    const grouped = new Map<string, T.MaterialPosition>();
+    for (const row of rows) {
+      const key = `${row.location_code}|${row.material_code}|${row.lot_number}|${row.unit}|${row.hazard_class}`;
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, { ...row });
+      } else {
+        grouped.set(key, {
+          ...existing,
+          quantity: existing.quantity + row.quantity,
+          status: "Staged",
+        });
+      }
+    }
+    return Array.from(grouped.values());
+  }
+
+  async function loadCampaignInventory(campaignId: string) {
+    if (!campaignId) { setCampaignPlantInventory(null); return; }
+    const data = await api.campaignPlantInventory(campaignId);
+    setCampaignPlantInventory(data);
+  }
+
+  function addPrDraftLine(req: T.CampaignInventoryRequirement, lot: T.InventoryLot, quantity: number) {
+    if (quantity <= 0) return;
+    setPrDraftLines((current) => [...current, {
+      material_code: req.material_code,
+      material_name: req.material_name,
+      lot_number: lot.lot_number,
+      requested_quantity: quantity,
+      unit: req.unit,
+      source_location: lot.location,
+      hazard_class: req.hazard_class,
+    }]);
   }
 
   function renderWeighingZone() {
@@ -1377,6 +1909,276 @@ try {
           <article><span>Completed Tickets</span><strong>{weighTickets.filter((ticket) => ticket.status === "Completed").length}</strong></article>
         </div>
 
+        <SectionCard title="PAS-X Material Reconciliation & PR Builder" eyebrow="Search PO Material → Check Staging → Select Warehouse Lot → Build PR">
+          <p className="subtext">Work one PO material at a time. PAS-X stores each selected lot and quantity in the PR draft until every campaign requirement is covered, then the complete PR can be submitted to Warehouse.</p>
+
+          <div className="weigh-pr-toolbar">
+            <label>Office Campaign
+              <select value={activeWeighCampaignId} onChange={(event) => {
+                const id=event.target.value;
+                setActiveWeighCampaignId(id);
+                setPrDraftLines([]);
+                setSelectedRequirementCode("");
+                setWeighMaterialSearch("");
+                setWeighInventoryMode("required");
+                void loadCampaignInventory(id);
+              }}>
+                <option value="">Select campaign...</option>
+                {campaigns.filter(c=>c.status!=="Closed").map(c=><option key={c.campaign_id} value={c.campaign_id}>{c.campaign_id} · {c.po_numbers}</option>)}
+              </select>
+            </label>
+
+            {campaignPlantInventory && <label>PO Material Number Search
+              <input
+                placeholder="Example: 9PHQ9Y1OLM"
+                value={weighMaterialSearch}
+                onChange={(event)=>{
+                  const value=event.target.value.toUpperCase();
+                  setWeighMaterialSearch(value);
+                  const exact=campaignPlantInventory.requirements.find(r=>r.material_code.toUpperCase()===value);
+                  if(exact) setSelectedRequirementCode(exact.material_code);
+                }}
+              />
+            </label>}
+          </div>
+
+          {campaignPlantInventory && (
+            <>
+              <div className="campaign-workload-strip">
+                <div><strong>{campaignPlantInventory.campaign.campaign_id}</strong><span>{campaignPlantInventory.campaign.po_numbers.join(" · ")}</span></div>
+                <span className="status-chip">{campaignPlantInventory.campaign.status}</span>
+                {campaignPlantInventory.campaign.status==="Pending Weigh Acceptance" &&
+                  <button className="button primary" onClick={()=>void runAction(async()=>{
+                    await api.acceptCampaignWorkload(campaignPlantInventory.campaign.campaign_id,weighOperator);
+                    await loadCampaignInventory(campaignPlantInventory.campaign.campaign_id);
+                  },"Campaign workload accepted")}>Accept Campaign Workload</button>}
+              </div>
+
+              <div className="material-chip-row">
+                {campaignPlantInventory.requirements.map(req=>{
+                  const selected=req.material_code===selectedRequirementCode;
+                  const draftQty=prDraftLines.filter(x=>x.material_code===req.material_code).reduce((a,b)=>a+b.requested_quantity,0);
+                  const covered=req.staged_available+draftQty >= req.campaign_required-0.0001;
+                  return <button
+                    key={req.material_code}
+                    className={`material-chip ${selected?"selected":""} ${covered?"complete":""}`}
+                    onClick={()=>{setSelectedRequirementCode(req.material_code);setWeighMaterialSearch(req.material_code);setWeighInventoryMode("required")}}
+                  >
+                    <strong>{req.material_code}</strong>
+                    <span>{req.material_name}</span>
+                    <small>{covered?"Covered":`${Math.max(0,req.remaining_to_request-draftQty).toFixed(3)} ${req.unit} to request`}</small>
+                  </button>
+                })}
+              </div>
+
+              {(()=>{
+                const req=campaignPlantInventory.requirements.find(r=>r.material_code===selectedRequirementCode) ??
+                  campaignPlantInventory.requirements.find(r=>r.material_code.toUpperCase()===weighMaterialSearch.trim().toUpperCase());
+                if(!req) return <div className="empty-state">Enter or select a material number from the PO to reconcile staging and Warehouse inventory.</div>;
+
+                const staged=campaignPlantInventory.staging.filter(x=>x.material_code===req.material_code);
+                const draftQty=prDraftLines.filter(x=>x.material_code===req.material_code).reduce((a,b)=>a+b.requested_quantity,0);
+                const stillNeeded=Math.max(0,req.campaign_required-req.staged_available-draftQty);
+                const primaryLots=campaignPlantInventory.required_warehouse.filter(x=>x.material_code===req.material_code);
+                const subs=campaignPlantInventory.approved_substitutes[req.material_code] ?? [];
+                const rnd=campaignPlantInventory.rnd_candidates.filter(x=>x.target_material_code===req.material_code);
+
+                return <div className="material-reconcile-panel">
+                  <div className="material-summary-strip">
+                    <div><span>Required</span><strong>{req.campaign_required.toFixed(3)} {req.unit}</strong></div>
+                    <div><span>Already Staged</span><strong>{req.staged_available.toFixed(3)} {req.unit}</strong></div>
+                    <div><span>PR Draft</span><strong>{draftQty.toFixed(3)} {req.unit}</strong></div>
+                    <div><span>Remaining</span><strong>{stillNeeded.toFixed(3)} {req.unit}</strong></div>
+                  </div>
+
+                  <div className="inventory-mode-tabs">
+                    <button className={weighInventoryMode==="required"?"active":""} onClick={()=>setWeighInventoryMode("required")}>Required Material</button>
+                    <button className={weighInventoryMode==="substitutes"?"active":""} onClick={()=>setWeighInventoryMode("substitutes")}>Approved Substitutes</button>
+                    <button className={weighInventoryMode==="full"?"active":""} onClick={()=>setWeighInventoryMode("full")}>Advanced Plant Search</button>
+                  </div>
+
+                  {weighInventoryMode==="required" && <>
+                    <div className="compact-inventory-section">
+                      <h4>Chem Weigh Staging</h4>
+                      {staged.length ? <div className="compact-lot-list">{staged.map(pos=><div key={pos.container_id} className="compact-lot-row"><span>{pos.lot_number}</span><span>{pos.location_code}</span><strong>{pos.quantity} {pos.unit}</strong>{pos.hazard_class==="Hazardous"&&<em>⚠ HAZ</em>}</div>)}</div>
+                      : <p className="empty-state">No {req.material_name} is currently staged. A Warehouse PR is required.</p>}
+                    </div>
+
+                    <div className="compact-inventory-section">
+                      <h4>Warehouse Lots — {req.material_name}</h4>
+                      {primaryLots.length ? <div className="compact-lot-list">{primaryLots.map(lot=>{
+                        const available=Math.max(0,lot.quantity-(lot.reserved_quantity??0));
+                        const qty=Math.min(stillNeeded,available);
+                        return <div key={lot.lot_number} className="compact-lot-row">
+                          <span>{lot.lot_number}</span><span>{lot.location}</span><strong>{available.toFixed(3)} {lot.unit}</strong>
+                          <button className="button secondary" disabled={qty<=0 || campaignPlantInventory.campaign.status==="Pending Weigh Acceptance"} onClick={()=>addPrDraftLine(req,lot,qty)}>Add {qty.toFixed(3)}</button>
+                        </div>
+                      })}</div>:<p className="empty-state">No primary Warehouse lot is available. Check approved substitutes.</p>}
+                    </div>
+                  </>}
+
+                  {weighInventoryMode==="substitutes" && <div className="compact-inventory-section">
+                    <h4>Approved Alternative Materials</h4>
+                    {subs.length ? <div className="compact-lot-list">{subs.map(sub=><div key={sub.internal_lot_number} className="compact-lot-row"><span>{sub.material_name}</span><span>{sub.internal_lot_number}</span><strong>{Number(sub.available_quantity).toFixed(3)} {sub.unit_of_measure}</strong><button className="button warning" onClick={()=>void runAction(()=>api.requestWeighSubstitution(campaignPlantInventory.campaign.po_numbers[0],req.material_code,sub.internal_lot_number),`Office approval requested for ${sub.material_name}`)}>Request Office Approval</button></div>)}</div>
+                    : <p className="empty-state">No approved substitute inventory is available. Use Advanced Plant Search to request an R&D evaluation through Office.</p>}
+                  </div>}
+
+                  {weighInventoryMode==="full" && <div className="compact-inventory-section">
+                    <h4>Advanced Plant Search / R&D Escalation</h4>
+                    <p className="subtext">This view is intentionally hidden during normal PR construction. Use it only when the required material and approved alternatives cannot satisfy the campaign.</p>
+                    {rnd.length ? <div className="compact-lot-list">{rnd.map(candidate=><div key={candidate.candidate_code} className="compact-lot-row"><span>{candidate.candidate_name}</span><span>{candidate.candidate_code}</span><strong>{candidate.approval_status}</strong><button className="button warning" onClick={()=>void runAction(()=>api.requestRndAlternativeEvaluation({campaign_id:campaignPlantInventory.campaign.campaign_id,po_number:campaignPlantInventory.campaign.po_numbers[0],original_material_code:req.material_code,candidate_code:candidate.candidate_code,requester:weighOperator,note:"Primary and approved substitute inventory cannot satisfy campaign requirement."}),`Office asked to initiate R&D evaluation of ${candidate.candidate_name}`)}>Request Office → R&D</button></div>)}</div>:null}
+                    <details className="full-inventory-details"><summary>Open complete Warehouse inventory</summary><div className="compact-lot-list">{campaignPlantInventory.warehouse.filter(l=>!weighMaterialSearch || `${l.material_code} ${l.material_name} ${l.lot_number}`.toUpperCase().includes(weighMaterialSearch.toUpperCase())).map(lot=><div key={`${lot.material_code}-${lot.lot_number}`} className="compact-lot-row"><span>{lot.material_name}</span><span>{lot.material_code} · {lot.lot_number}</span><strong>{lot.quantity} {lot.unit} · {lot.location}</strong></div>)}</div></details>
+                  </div>}
+
+                  <div className="pr-draft-compact">
+                    <h4>PAS-X PR Draft</h4>
+                    {prDraftLines.length ? prDraftLines.map((line,index)=><div key={`${line.material_code}-${line.lot_number}-${index}`} className="compact-lot-row"><span>{line.material_code}</span><span>{line.lot_number}</span><strong>{line.requested_quantity.toFixed(3)} {line.unit}</strong><button className="button secondary" onClick={()=>setPrDraftLines(current=>current.filter((_,i)=>i!==index))}>Remove</button></div>):<p className="empty-state">No Warehouse lots have been added yet.</p>}
+                  </div>
+                </div>
+              })()}
+
+              {(()=>{
+                const uncovered=campaignPlantInventory.requirements.filter(req=>{
+                  const draft=prDraftLines.filter(x=>x.material_code===req.material_code).reduce((a,b)=>a+b.requested_quantity,0);
+                  return req.staged_available+draft < req.campaign_required-0.0001;
+                });
+                return <div className="pr-submit-strip">
+                  <span>{uncovered.length ? `${uncovered.length} PO material requirement(s) still need coverage.` : "All PO materials covered. PR is ready for Warehouse."}</span>
+                  <button className="button primary" disabled={!prDraftLines.length || uncovered.length>0 || campaignPlantInventory.campaign.status==="Pending Weigh Acceptance"} onClick={()=>void runAction(async()=>{
+                    const primaryPo=campaignPlantInventory.campaign.po_numbers[0];
+                    await api.createMaterialPR(primaryPo,campaignPlantInventory.campaign.campaign_id,weighOperator,prDraftLines);
+                    setPrDraftLines([]);
+                    await refresh();
+                    await loadCampaignInventory(campaignPlantInventory.campaign.campaign_id);
+                  },"Complete Material PR submitted to Warehouse")}>Submit Complete PR to Warehouse</button>
+                </div>
+              })()}
+            </>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Material Zone Handoff" eyebrow="Warehouse → Vestibule → Weigh Staging → Weigh Room → Knitting">
+          {campaignPlantInventory ? (()=>{
+            const campaignId=campaignPlantInventory.campaign.campaign_id;
+            const requiredCodes=new Set(campaignPlantInventory.requirements.map(r=>r.material_code));
+            const vestibule=materialPositions.filter(p=>p.campaign_id===campaignId && p.location_code==="WH-VEST-01");
+            const general=mergeLiveStagingPositions(materialPositions.filter(p=>p.location_code==="CW-STAGE-01" && requiredCodes.has(p.material_code)));
+            const hazardous=mergeLiveStagingPositions(materialPositions.filter(p=>p.location_code==="CW-HAZ-01" && requiredCodes.has(p.material_code)));
+            const inRoom=materialPositions.filter(p=>p.campaign_id===campaignId && ["WR-01","WR-02"].includes(p.location_code));
+            const stagedQty=(code:string)=>[...general,...hazardous,...inRoom].filter(p=>p.material_code===code).reduce((sum,p)=>sum+p.quantity,0);
+            const stagingComplete=vestibule.length===0 && campaignPlantInventory.requirements.every(r=>stagedQty(r.material_code)+1e-9>=r.campaign_required);
+            const campaignInRoom=inRoom.length>0 || campaignPlantInventory.campaign.status==="In Weighing";
+
+            return <>
+              <div className="zone-handoff-path">
+                <span>Warehouse / Black Zone</span><b>→</b>
+                <span className={vestibule.length?"active":""}>Weigh Vestibule / Transition</span><b>→</b>
+                <span className={!campaignInRoom && (general.length||hazardous.length)?"active":""}>CW-Staging + CWH-Staging / Grey Zone</span><b>→</b>
+                <span className={campaignInRoom?"active":""}>{selectedRoom} / White Zone</span><b>→</b>
+                <span>Chem Weigh Knitting / Grey Zone</span>
+              </div>
+
+              {vestibule.length > 0 && (
+                <div className="handoff-stage-block handoff-stage-block--attention">
+                  <div className="handoff-stage-heading">
+                    <div>
+                      <span className="eyebrow">STEP 1 · WEIGH OPERATOR CUSTODY</span>
+                      <h3>Bend Delivered Material Into Weigh Staging</h3>
+                      <p>Warehouse custody ends at the Vestibule. Each container must be accepted by Weighing and bent into CW-Staging or CWH-Staging before a weigh-room bend is available.</p>
+                    </div>
+                    <span className="status-chip">{vestibule.length} waiting</span>
+                  </div>
+
+                  <div className="vestibule-bend-list">
+                    {vestibule.map(pos=>{
+                      const destination=pos.hazard_class==="Hazardous" ? "CWH-Staging" : "CW-Staging";
+                      return <article key={pos.container_id} className="vestibule-bend-row">
+                        <div><strong>{pos.material_name}</strong><small>{pos.material_code} · {pos.lot_number}</small></div>
+                        <div><span>{pos.quantity} {pos.unit}</span><small>WH-VEST-01</small></div>
+                        <div className="handoff-arrow">→</div>
+                        <div><strong>{destination}</strong><small>{pos.hazard_class==="Hazardous"?"CW-HAZ-01":"CW-STAGE-01"}</small></div>
+                        <button className="button primary bend-staging-button" onClick={()=>void runAction(async()=>{
+                          await api.bendVestibuleToStaging(pos.container_id,weighOperator);
+                          await refresh();
+                          await loadCampaignInventory(campaignId);
+                        },`${pos.material_name} accepted and bent into ${destination}`)}>Accept + Bend Into {destination}</button>
+                      </article>
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="handoff-stage-block">
+                <div className="handoff-stage-heading">
+                  <div>
+                    <span className="eyebrow">STEP 2 · GREY ZONE INVENTORY</span>
+                    <h3>Current Weigh Staging Inventory</h3>
+                    <p>General material remains in CW-Staging. Alcohol and flavors remain in CWH-Staging. The room bend stays locked until the complete campaign requirement is present.</p>
+                  </div>
+                  <span className={`status-chip ${stagingComplete?"ready-chip":""}`}>{stagingComplete?"READY":"NOT READY"}</span>
+                </div>
+
+                <div className="staging-two-column">
+                  <div className="compact-inventory-section">
+                    <h4>CW-Staging — General</h4>
+                    {general.length ? <div className="compact-lot-list">{general.map(pos=><div key={pos.container_id} className="compact-lot-row staging-row"><span>{pos.material_name}</span><span>{pos.lot_number}</span><strong>{pos.quantity} {pos.unit}</strong><em>CW-STAGE-01</em></div>)}</div>:<p className="empty-state">No general material currently staged.</p>}
+                  </div>
+                  <div className="compact-inventory-section">
+                    <h4>CWH-Staging — Hazardous</h4>
+                    {hazardous.length ? <div className="compact-lot-list">{hazardous.map(pos=><div key={pos.container_id} className="compact-lot-row staging-row"><span>{pos.material_name}</span><span>{pos.lot_number}</span><strong>{pos.quantity} {pos.unit}</strong><em>⚠ CW-HAZ-01</em></div>)}</div>:<p className="empty-state">No hazardous material currently staged.</p>}
+                  </div>
+                </div>
+
+                <div className="staging-requirement-grid">
+                  {campaignPlantInventory.requirements.map(req=>{
+                    const staged=stagedQty(req.material_code);
+                    const short=Math.max(0,req.campaign_required-staged);
+                    return <div key={req.material_code} className={`staging-requirement ${short<=1e-9?"complete":""}`}>
+                      <strong>{req.material_name}</strong><span>{req.material_code}</span>
+                      <small>Required {req.campaign_required.toFixed(3)} {req.unit}</small>
+                      <small>In staging {staged.toFixed(3)} {req.unit}</small>
+                      <b>{short<=1e-9?"Ready":`Short ${short.toFixed(3)} ${req.unit}`}</b>
+                    </div>
+                  })}
+                </div>
+              </div>
+
+              {!campaignInRoom && (
+                <div className={`campaign-bend-gate ${stagingComplete?"ready":""}`}>
+                  <div>
+                    <span className="eyebrow">STEP 3 · WHITE ZONE ENTRY</span>
+                    <strong>{stagingComplete ? `Campaign Ready For ${selectedRoom}` : "Bend Into Weigh Room Interlocked"}</strong>
+                    <span>{stagingComplete
+                      ? `All campaign material is physically present in CW-Staging/CWH-Staging.`
+                      : vestibule.length
+                        ? "Material remains in the Weigh Vestibule. Bend every delivered container into staging first."
+                        : "Staging does not yet cover the complete campaign requirement."}</span>
+                  </div>
+                  {stagingComplete && <button className="button primary white-zone-bend-button" onClick={()=>void runAction(async()=>{
+                    await api.bendCampaignToWeighRoom(campaignId,selectedRoom,weighOperator);
+                    await refresh();
+                    await loadCampaignInventory(campaignId);
+                    await syncCampaignWeighSequence();
+                  },`Complete campaign bent from Weigh Staging into ${selectedRoom}`)}>Bend Complete Campaign Into {selectedRoom}</button>}
+                </div>
+              )}
+
+              {campaignInRoom && (
+                <div className="handoff-stage-block handoff-stage-block--ready">
+                  <div className="handoff-stage-heading">
+                    <div>
+                      <span className="eyebrow">STEP 4 · WHITE ZONE DISPENSING</span>
+                      <h3>Campaign Is In {selectedRoom}</h3>
+                      <p>Open the sequenced PO ticket, tare the required scale, and weigh only the materials permitted on that selected scale.</p>
+                    </div>
+                    <span className="status-chip ready-chip">IN WHITE ZONE</span>
+                  </div>
+                </div>
+              )}
+            </>
+          })():<p className="empty-state">Select an Office campaign above to begin the controlled material handoff.</p>}
+        </SectionCard>
+
         <SectionCard title="Weigh Room Selection" eyebrow="White Zone Work Centers">
           <div className="weigh-room-grid">
             {weighRooms.map((room) => (
@@ -1391,12 +2193,27 @@ try {
           </div>
           <div className="button-row">
             <label className="inline-field">Operator<input value={weighOperator} onChange={(event) => setWeighOperator(event.target.value)} /></label>
-            {cartAlreadyBent ? (
-              <span className="status-note">Cart already bent into {selectedRoom} for {selectedRoomAsset?.active_po}</span>
-            ) : (
-              <button className="button secondary" onClick={() => void runAction(bendIntoSelectedRoom, `Cart bent into ${selectedRoom}`)}>Bend Into {selectedRoom}</button>
-            )}
-            <button className="button primary" onClick={() => void runAction(openWeighTicket, "Electronic weigh ticket opened")}>Open Ticket for {selectedRoomAsset?.active_po ?? "Bent-In PO"}</button>
+            <span className="status-note">
+              {selectedRoomAsset?.active_po
+                ? `${selectedRoom} sequenced for ${selectedRoomAsset.active_po}`
+                : "No campaign has completed the staging-to-white-zone bend."}
+            </span>
+            <button
+              className="button primary"
+              disabled={!selectedRoomAsset?.active_po}
+              onClick={() => void runAction(
+                activeRoomTicket(selectedRoom, selectedRoomAsset?.active_po)
+                  ? resumeSelectedRoomWorkflow
+                  : openWeighTicket,
+                activeRoomTicket(selectedRoom, selectedRoomAsset?.active_po)
+                  ? `Current ${selectedRoom} task resumed`
+                  : "Electronic weigh ticket opened",
+              )}
+            >
+              {activeRoomTicket(selectedRoom, selectedRoomAsset?.active_po)
+                ? `Resume Current ${selectedRoom} Task`
+                : `Open Ticket for ${selectedRoomAsset?.active_po ?? "Awaiting Campaign Bend"}`}
+            </button>
           </div>
           {weighRoutePo && (
             <div className="route-request-panel">
@@ -1411,6 +2228,24 @@ try {
             </div>
           )}
         </SectionCard>
+
+          {activeWeighCampaignId && (
+            <div className="campaign-weigh-sequence-banner">
+              <div>
+                <span className="eyebrow">CAMPAIGN DISPENSE SEQUENCE</span>
+                <strong>Material-by-material across every campaign PO</strong>
+                <small>API PO1 → API PO2 → API PO3 → next material PO1 → PO2 → PO3.</small>
+              </div>
+              {campaignWeighTask?.po_number && <div className="campaign-weigh-next">
+                <span>{campaignWeighTask.phase === "signature" ? "Next Signature" : "Current Weigh Task"}</span>
+                <strong>{campaignWeighTask.po_number}</strong>
+                <small>{campaignWeighTask.material_name ?? "Electronic signature"}</small>
+                <button className="button secondary campaign-sync-button" onClick={()=>void resumeCurrentCampaignWeighTask()}>
+                  {selectedRoomAsset?.active_po ? `Resume ${selectedRoom} Task` : "Load Current Task"}
+                </button>
+              </div>}
+            </div>
+          )}
 
         <div className="zone-columns weighing-layout">
           <SectionCard title="Electronic Ticket Queue" eyebrow="PAS-X Dispensing Records">
@@ -1438,16 +2273,30 @@ try {
           </SectionCard>
 
           <SectionCard title="Scale HMI" eyebrow="Tare, Barcode & Tolerance Interlocks">
-            {weighWorkspace ? (
+            {weighWorkspace && campaignWeighTask?.po_number && weighWorkspace.ticket.po_number !== campaignWeighTask.po_number ? (
+              <div className="weigh-hmi stale-campaign-hmi">
+                <div className="hmi-header">
+                  <div><span>Previous Ticket</span><strong>{weighWorkspace.ticket.ticket_number}</strong></div>
+                  <div><span>Required Next PO</span><strong>{campaignWeighTask.po_number}</strong></div>
+                </div>
+                <div className="campaign-advance-interlock">
+                  <span className="eyebrow">CAMPAIGN ADVANCE INTERLOCK</span>
+                  <h3>Previous PO is complete for this material.</h3>
+                  <p>The HMI will not allow another tare or dispense against {weighWorkspace.ticket.po_number}. Resume the canonical campaign task to load {campaignWeighTask.po_number} / {campaignWeighTask.material_name ?? "next material"}.</p>
+                  <button className="button primary" onClick={()=>void resumeCurrentCampaignWeighTask()}>Load {campaignWeighTask.po_number}</button>
+                </div>
+              </div>
+            ) : weighWorkspace ? (
               <div className="weigh-hmi">
                 <div className="hmi-header"><div><span>Ticket</span><strong>{weighWorkspace.ticket.ticket_number}</strong></div><div><span>Status</span><strong>{weighWorkspace.ticket.status}</strong></div></div>
+                <div className="scale-selector">{["Bench Scale","Hazardous Scale","Dye Scale Booth"].map((scale) => <button key={scale} className={`button ${selectedScale===scale?"primary":"secondary"}`} onClick={() => setSelectedScale(scale)}>{scale}</button>)}</div>
                 <progress max="100" value={weighWorkspace.completion_percent} />
                 <p>{weighWorkspace.completion_percent}% complete</p>
                 {weighWorkspace.current_line ? (
                   <>
                     <h3>{weighWorkspace.current_line.material_name}</h3>
                     <div className="detail-list">
-                      <div><span>Material</span><strong>{weighWorkspace.current_line.material_code}</strong></div>
+                      <div><span>Required Scale</span><strong>{weighWorkspace.current_line.scale_type}</strong></div><div><span>Container</span><strong>{weighWorkspace.current_line.container_id ?? "Pending"}</strong></div><div><span>Material</span><strong>{weighWorkspace.current_line.material_code}</strong></div>
                       <div><span>Lot</span><strong>{weighWorkspace.current_line.lot_number}</strong></div>
                       <div><span>Target</span><strong>{weighWorkspace.current_line.target_quantity} {weighWorkspace.current_line.unit}</strong></div>
                       <div><span>Tolerance</span><strong>±{weighWorkspace.current_line.tolerance}%</strong></div>
@@ -1455,18 +2304,18 @@ try {
                       <div><span>Barcode</span><strong>{weighWorkspace.current_line.barcode_verified ? "Verified" : "Required"}</strong></div>
                     </div>
                     <div className="hmi-controls">
-                      <button className="button primary" onClick={() => void runWeighAction(() => api.tareWeighTicket(weighWorkspace.ticket.ticket_number, weighOperator), "Scale tare confirmed")}>Tare Scale</button>
+                      <button className="button primary" disabled={selectedScale !== weighWorkspace.current_line.scale_type} onClick={() => void runWeighAction(() => api.tareWeighTicket(weighWorkspace.ticket.ticket_number, weighOperator), "Scale tare confirmed")}>Tare Scale</button>
                       <label>Barcode<input value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder={`${weighWorkspace.current_line.material_code} or ${weighWorkspace.current_line.lot_number}`} /></label>
-                      <button className="button secondary" onClick={() => void runWeighAction(() => api.verifyWeighBarcode(weighWorkspace.ticket.ticket_number, barcode.trim() || weighWorkspace.current_line!.lot_number), "Barcode verified")}>Scan / Verify Barcode</button>
+                      <button className="button secondary" disabled={selectedScale !== weighWorkspace.current_line.scale_type} onClick={() => void runWeighAction(() => api.verifyWeighBarcode(weighWorkspace.ticket.ticket_number, barcode.trim() || weighWorkspace.current_line!.lot_number), "Barcode verified")}>Scan / Verify Barcode</button>
                       <label>Actual Weight<input type="number" step="0.001" value={actualWeight} placeholder="Enter weight" onFocus={(event) => event.currentTarget.select()} onChange={(event) => setActualWeight(event.target.value)} /></label>
-                      <button className="button primary" disabled={actualWeight.trim() === ""} onClick={() => void runWeighAction(() => api.weighMaterial(weighWorkspace.ticket.ticket_number, Number(actualWeight), weighOperator), "Material dispensed within tolerance", { clearBarcode: true, clearWeight: true })}>Record Weight</button>
+                      <button className="button primary" disabled={actualWeight.trim() === "" || selectedScale !== weighWorkspace.current_line.scale_type} onClick={() => void runWeighAction(() => api.weighMaterial(weighWorkspace.ticket.ticket_number, Number(actualWeight), weighOperator), "Material dispensed within tolerance", { clearBarcode: true, clearWeight: true })}>Record Weight</button>
                     </div>
                   </>
                 ) : (
                   <div className="signature-panel"><p>All material lines are complete.</p><label>Electronic Signature<input value={signature} onChange={(event) => setSignature(event.target.value)} /></label><button className="button primary" onClick={() => void runWeighAction(() => api.signWeighTicket(weighWorkspace.ticket.ticket_number, signature), "Weigh ticket signed and released to Mixing")}>Sign & Complete Ticket</button></div>
                 )}
               </div>
-            ) : <p className="empty-state">Open or select a weigh ticket to display the scale HMI.</p>}
+            ) : <p className="empty-state">Open the sequenced PO ticket, then tare the correct scale. Only materials permitted on that scale are visible for weighing.</p>}
           </SectionCard>
         </div>
       </div>
@@ -1474,13 +2323,67 @@ try {
   }
 
   function renderMixingZone() {
-    const batch = mixWorkspace?.batch;
-    const premix = mixWorkspace?.premix;
+    // Persisted workspace may be recovered silently so automatic PLC/tick
+    // behavior continues, but it is not exposed as an operator HMI until the
+    // operator explicitly enters/resumes the room.
+    const batch = mixRoomEntered ? mixWorkspace?.batch : undefined;
+    const premix = mixRoomEntered ? mixWorkspace?.premix : undefined;
     const scheduledHold = productionOrders.find((po) => po.po_number === batch?.po_number)?.hold_tank;
     const bulkProductionOrder = productionOrders.find((po) => po.po_number === bulkPo);
     const bulkMaterial = bulkProductionOrder?.bulk_material ?? "Propylene Glycol";
     const bulkRecipe = bulkRecipeByMaterial[bulkMaterial] ?? bulkRecipeByMaterial["Propylene Glycol"];
     const bulkSourceTank = bulkTanks.find((tank) => tank.tank_code === bulkRecipe.tankCode);
+
+    const currentManualMaterialName =
+      batch?.phase === "Manual Add - Alcohol"
+        ? "Alcohol"
+        : batch?.phase === "Manual Add - Anhydrous Citric Acid"
+          ? "Anhydrous Citric Acid"
+          : batch?.phase === "Manual Add - Benzoic Acid"
+            ? "Benzoic Acid"
+            : batch?.phase === "Manual Add - Edetate Disodium"
+              ? "Edetate Disodium"
+              : batch?.phase === "Manual Add - Saccharin Sodium"
+                ? "Saccharin Sodium"
+                : batch?.phase === "Controlled API Addition"
+                  ? "Prednisolone"
+                  : batch?.phase === "Flavor Addition"
+                    ? (mixWorkspace?.materials ?? []).find((item) =>
+                        ["Cherry", "Strawberry", "Grape", "Berry"].includes(item.material_name),
+                      )?.material_name ?? null
+                    : null;
+
+    const currentManualMaterial = (mixWorkspace?.materials ?? []).find(
+      (item) => item.material_name === currentManualMaterialName,
+    );
+
+    const activeManualSequenceNames =
+      batch?.phase === "Open Tank - Manual Group 1" ||
+      ["Manual Add - Alcohol", "Manual Add - Anhydrous Citric Acid", "Manual Add - Benzoic Acid"].includes(batch?.phase ?? "")
+        ? ["Alcohol", "Anhydrous Citric Acid", "Benzoic Acid"]
+        : batch?.phase === "Open Tank - Manual Group 2" ||
+          ["Manual Add - Edetate Disodium", "Manual Add - Saccharin Sodium"].includes(batch?.phase ?? "")
+          ? ["Edetate Disodium", "Saccharin Sodium"]
+          : batch?.phase === "Open Tank - API / Flavor" ||
+            ["Controlled API Addition", "Flavor Addition"].includes(batch?.phase ?? "")
+            ? [
+                "Prednisolone",
+                ...((mixWorkspace?.materials ?? [])
+                  .filter((item) => ["Cherry", "Strawberry", "Grape", "Berry"].includes(item.material_name))
+                  .map((item) => item.material_name)),
+              ]
+            : [];
+
+    const activeManualSequenceMaterials=(mixWorkspace?.materials ?? []).filter(
+      (item) => activeManualSequenceNames.includes(item.material_name),
+    );
+
+    const currentManualVerified =
+      Boolean(currentManualMaterial) &&
+      (
+        currentManualMaterial!.weighing_status.includes("BARCODE VERIFIED") ||
+        currentManualMaterial!.weighing_status.includes("ADDED TO MIX TANK")
+      );
 
     return (
       <div className="zone-stack">
@@ -1570,10 +2473,32 @@ try {
           </div>
           <div className="button-row">
             <label className="inline-field">Operator<input value={mixOperator} onChange={(event) => setMixOperator(event.target.value)} /></label>
-            <button className="button primary" onClick={() => void runAction(openMixBatch, "Mix batch opened from the completed weighing queue")}>Open Scheduled Batch</button>
+            <button
+              className="button primary"
+              onClick={() =>
+                void runAction(
+                  openMixBatch,
+                  mixRooms.find((room) => room.room_code === selectedMixRoom)?.active_po &&
+                    activeMixBatchForRoom(
+                      selectedMixRoom,
+                      mixRooms.find((room) => room.room_code === selectedMixRoom)?.active_po,
+                    )
+                    ? `Current ${selectedMixRoom} batch resumed`
+                    : "Mix batch opened from the completed weighing queue",
+                )
+              }
+            >
+              {mixRooms.find((room) => room.room_code === selectedMixRoom)?.active_po &&
+              activeMixBatchForRoom(
+                selectedMixRoom,
+                mixRooms.find((room) => room.room_code === selectedMixRoom)?.active_po,
+              )
+                ? `Resume Current ${selectedMixRoom} Batch`
+                : selectedMixPo ? `Open ${selectedMixPo} in Mixing` : "Select PO to Open"}
+            </button>
           </div>
-          {(batch || mixQueue[0]) && (() => {
-            const po = productionOrders.find((item) => item.po_number === (batch?.po_number ?? mixQueue[0]?.po_number));
+          {(batch || selectedMixPo) && (() => {
+            const po = productionOrders.find((item) => item.po_number === (batch?.po_number ?? selectedMixPo));
             if (!po) return null;
             return (
               <div className="route-request-panel">
@@ -1594,12 +2519,22 @@ try {
           <SectionCard title="Mixing Work Queue" eyebrow="Completed Weigh Tickets & Active Batches">
             <div className="mix-queue-list">
               {mixQueue.map((po) => (
-                <article className="mix-queue-card" key={po.id}>
-                  <div><strong>{po.po_number}</strong><span>Ready</span></div>
+                <button
+                  type="button"
+                  className={`mix-queue-card ${selectedMixPo === po.po_number ? "selected" : ""}`}
+                  key={po.id}
+                  onClick={() => {
+                    setSelectedMixPo(po.po_number);
+                    const scheduledRoom = mixRooms.find((room) => room.tank_code === po.mix_tank);
+                    if (scheduledRoom) setSelectedMixRoom(scheduledRoom.room_code);
+                    setMixRoomEntered(false);
+                  }}
+                >
+                  <div><strong>{po.po_number}</strong><span>{selectedMixPo === po.po_number ? "Selected" : "Ready"}</span></div>
                   <p>{po.product_name}</p>
                   <small>{po.batch_number} · {po.mix_tank} → {po.hold_tank}</small>
-                  <small>{po.bulk_material} bulk · {po.requires_premix ? "Dye premix required" : "No dye premix"}</small>
-                </article>
+                  <small>Water → Glycerin + PPG → Sucrose · {po.requires_premix ? "Parallel dye premix required" : "No dye premix"}</small>
+                </button>
               ))}
               {mixBatches.map((item) => (
                 <button key={item.id} className={`ticket-card ${selectedMixBatch === item.batch_id ? "selected" : ""}`} onClick={() => void loadMixWorkspace(item.batch_id)}>
@@ -1630,7 +2565,9 @@ try {
                   <article><span>Tank Level</span><strong>{batch.level_percent.toFixed(1)}%</strong></article>
                   <article><span>Mass</span><strong>{batch.mass_kg.toFixed(1)} kg</strong></article>
                   <article><span>Temperature</span><strong>{batch.temperature_c.toFixed(1)} °C</strong></article>
-                  <article><span>Agitator</span><strong>{batch.rpm} RPM</strong></article>
+                  <article><span>Agitator</span><strong>{batch.rpm} / {batch.agitator_command_rpm} RPM</strong></article>
+                  <article><span>Motor Load</span><strong>{batch.motor_load_percent.toFixed(1)}%</strong></article>
+                  <article><span>Vacuum</span><strong>{batch.vessel_closed ? `${batch.vacuum_bar.toFixed(2)} bar` : "VENTED"}</strong></article>
                 </div>
 
                 {batch.fault_code && (
@@ -1639,37 +2576,274 @@ try {
                     <p>{batch.fault_message}</p>
                     <small>{batch.fault_diagnosed ? "Fault diagnosed — reset permitted" : "Diagnose the failed interlock before reset"}</small>
                     <div className="button-row">
-                      <button className="button secondary" onClick={() => void runMixAction(() => api.diagnoseMixFault(batch.batch_id), "Fault diagnosed")}>Diagnose</button>
-                      <button className="button primary" onClick={() => void runMixAction(() => api.resetMixFault(batch.batch_id), "PLC reset; sequence resumed")}>Reset PLC</button>
+                      <button
+                        className="button secondary"
+                        disabled={busy || batch.fault_diagnosed}
+                        onClick={() => void runMixAction(() => api.diagnoseMixFault(batch.batch_id), "Fault diagnosed")}
+                      >
+                        {batch.fault_diagnosed ? "Diagnosed" : "Diagnose"}
+                      </button>
+                      <button
+                        className="button primary"
+                        disabled={busy || !batch.fault_diagnosed}
+                        onClick={() => void runMixAction(() => api.resetMixFault(batch.batch_id), "PLC reset; sequence resumed")}
+                      >
+                        Reset PLC
+                      </button>
                     </div>
                   </div>
                 )}
 
-                <div className="recipe-steps">
-                  {["Bulk Water Addition", "Bulk Excipient Verification", "Bulk Excipient Charge", "Bulk Excipient Confirmation", "Manual Additions", "Premix Required", "Final Agitation", "Select Hold Tank", "Transfer", "Transfer Complete"].map((step) => (
-                    <span key={step} className={batch.phase === step || (step === "Transfer" && batch.phase === "Transfer Sample Required") ? "active" : ""}>{step}</span>
-                  ))}
+                <div className="current-step-panel">
+                  <span>CURRENT EXECUTION STEP</span>
+                  <strong>{batch.readiness_verified ? batch.phase : "Pre-Batch Bulk Readiness"}</strong>
+                  <small>
+                    {batch.fault_code
+                      ? "PROCESS PAUSED BY PLC INTERLOCK. Diagnose and reset the active fault before any batch operation can continue."
+                      : "Only the active operation is executable. Completion, operator confirmation, and process values are written to MES before the next operation is released."}
+                  </small>
                 </div>
 
+                {!batch.readiness_verified && mixWorkspace && (
+                  <div className="premix-panel">
+                    <div><strong>Pre-Batch Bulk Material Verification</strong><span>{mixWorkspace.readiness_passed ? "READY" : "BLOCKED"}</span></div>
+                    {mixWorkspace.bulk_readiness.map((item) => (
+                      <p key={item.material}>
+                        <strong>{item.material}</strong>
+                        {" · "}{item.tank_code}
+                        {" · Required "}{item.required_quantity} kg
+                        {item.source_type === "Automatic USP Utility"
+                          ? " · Automatic USP Utility Feed"
+                          : ` · Available ${(item.available_quantity ?? 0).toFixed(2)} kg`}
+                        {" · QA "}{item.qa_status}
+                        {" · "}{item.source_type === "Automatic USP Utility" ? "Utility" : "Tank"}{" "}{item.equipment_status}
+                        {" · "}{item.ready ? "READY" : item.reason}
+                      </p>
+                    ))}
+                    {!mixWorkspace.readiness_passed && <><small>Resolve shortages through Office/Receiving, QA holds through Quality, and dirty/unavailable tank status through Operations/CIP. Mixing cannot override readiness.</small><button className="button secondary" onClick={() => void loadMixWorkspace(batch.batch_id)}>Refresh Live Bulk Readiness</button></>}
+                  </div>
+                )}
+
+                {!batch.fault_code && activeManualSequenceMaterials.length > 0 && (
+                  <div className="premix-panel">
+                    <div>
+                      <strong>Manual Add Material Scanner</strong>
+                      <span>
+                        {currentManualMaterial
+                          ? currentManualVerified
+                            ? "CURRENT MATERIAL VERIFIED"
+                            : `SCAN REQUIRED · ${currentManualMaterial.material_name}`
+                          : "SELECT REQUIRED MATERIAL"}
+                      </span>
+                    </div>
+                    <p>
+                      Select a material pill to place that material into the scanner,
+                      then press Scan / Verify Barcode like squeezing the scanner trigger.
+                      The backend rejects the wrong material for the active add step.
+                    </p>
+
+                    <div className="planned-checklist">
+                      {activeManualSequenceMaterials.map((item) => {
+                        const isCurrent=item.material_name === currentManualMaterialName;
+                        const isDone=item.weighing_status.includes("ADDED TO MIX TANK");
+                        return (
+                          <span
+                            key={`${item.material_code}-${item.material_lot ?? "pending"}`}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Load ${item.material_name} into scanner`}
+                            onClick={() => setMixMaterialBarcode(item.material_code)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setMixMaterialBarcode(item.material_code);
+                              }
+                            }}
+                            style={{
+                              cursor: "pointer",
+                              fontWeight: isCurrent ? 700 : 500,
+                              opacity: isDone ? 0.65 : 1,
+                            }}
+                          >
+                            {isCurrent ? "REQUIRED · " : ""}
+                            {item.material_name}
+                            {" · "}{item.material_code}
+                            {" · "}{item.material_lot ?? "lot pending"}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    {currentManualMaterial && (
+                      <div className="form-grid compact">
+                        <label>
+                          Scanner Input
+                          <input
+                            value={mixMaterialBarcode}
+                            placeholder={`${currentManualMaterial.material_code} or ${currentManualMaterial.material_lot ?? "lot"}`}
+                            onChange={(event) => setMixMaterialBarcode(event.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          disabled={!mixMaterialBarcode.trim() || currentManualVerified}
+                          onClick={() =>
+                            void scanMixMaterialBarcode().catch((scanError) =>
+                              setError(errorMessage(scanError)),
+                            )
+                          }
+                        >
+                          Scan / Verify Barcode
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="hmi-controls mix-controls">
-                  {batch.status === "Ready" && <button className="button primary" onClick={() => void runMixAction(() => api.mixAction(batch.batch_id, "start", mixOperator), "Automatic batch sequence started")}>Start Batch</button>}
-                  {batch.phase === "Bulk Excipient Verification" && <p className="interlock-note">Create and verify the PO-selected bulk excipient charge above. Manual additions remain interlocked.</p>}
-                  {batch.phase === "Bulk Excipient Confirmation" && (
-                    <button className="button primary" onClick={() => void runMixAction(() => api.confirmBulkPg(batch.batch_id, mixOperator), "Bulk excipient addition confirmed; manual additions released")}>Confirm Bulk Excipient Addition</button>
+                  {batch.status === "Ready" && !batch.readiness_verified && <button className="button primary" disabled={!mixWorkspace?.readiness_passed} onClick={() => void runMixAction(() => api.verifyMixReadiness(batch.batch_id, mixOperator), "Bulk material and equipment readiness verified; MES record created")}>Verify Batch Readiness · Sign</button>}
+                  {batch.status === "Ready" && batch.readiness_verified && <button className="button primary" onClick={() => void runMixAction(() => api.mixAction(batch.batch_id, "start", mixOperator), "Batch started; slow agitation enabled and water charge released")}>Start Batch · Operator Sign</button>}
+                  {!batch.fault_code && (
+                    <>
+                  {batch.phase === "Confirm Water Charge" && <><p className="interlock-note">Verify actual vessel weight matches the completed water charge before signing.</p><button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-water", mixOperator), "Water charge confirmed; automatic check weight started")}>Confirm Water Charge</button></>}
+                  {batch.phase === "Open Tank - Manual Group 1" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "open-tank-1", mixOperator), "Tank opened; agitator reduced to safe-add speed")}>Open Tank · Verify Safe Add</button>}
+                  {batch.phase === "Manual Add - Alcohol" && <><p className="interlock-note">Scan Alcohol, confirm identity/lot, add to the vessel, then confirm only this material.</p><button className="button primary" disabled={!currentManualVerified} onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-manual-alcohol", mixOperator), "Alcohol addition confirmed")}>Confirm Alcohol Add</button></>}
+                  {batch.phase === "Manual Add - Anhydrous Citric Acid" && <><p className="interlock-note">Scan Anhydrous Citric Acid, add to the vessel, then confirm only this material.</p><button className="button primary" disabled={!currentManualVerified} onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-manual-citric", mixOperator), "Citric Acid addition confirmed")}>Confirm Citric Acid Add</button></>}
+                  {batch.phase === "Manual Add - Benzoic Acid" && <><p className="interlock-note">Scan Benzoic Acid, add to the vessel, then confirm only this material.</p><button className="button primary" disabled={!currentManualVerified} onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-manual-benzoic", mixOperator), "Benzoic Acid addition confirmed")}>Confirm Benzoic Acid Add</button></>}
+                  {batch.phase === "Close Tank - Glycerin" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "close-tank-1", mixOperator), "Closure/vacuum verified; Glycerin automatic add started")}>Close Tank · Establish Vacuum</button>}
+                  {batch.phase === "Confirm Glycerin Add" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-glycerin", mixOperator), "Glycerin actual quantity confirmed")}>Confirm Glycerin Add</button>}
+                  {batch.phase === "Confirm Propylene Glycol Add" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-propylene-glycol", mixOperator), "Propylene Glycol actual quantity confirmed")}>Confirm Propylene Glycol Add</button>}
+                  {batch.phase === "Open Tank - Manual Group 2" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "open-tank-2", mixOperator), "Tank opened; safe-add agitation established")}>Open Tank · Verify Safe Add</button>}
+                  {batch.phase === "Manual Add - Edetate Disodium" && <><p className="interlock-note">Scan Edetate Disodium, add to the vessel, then confirm only this material.</p><button className="button primary" disabled={!currentManualVerified} onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-manual-edetate", mixOperator), "Edetate Disodium addition confirmed")}>Confirm Edetate Disodium Add</button></>}
+                  {batch.phase === "Manual Add - Saccharin Sodium" && <><p className="interlock-note">Scan Saccharin Sodium, add to the vessel, then confirm only this material.</p><button className="button primary" disabled={!currentManualVerified} onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-manual-saccharin", mixOperator), "Saccharin Sodium addition confirmed")}>Confirm Saccharin Sodium Add</button></>}
+                  {batch.phase === "Close Tank - Sucrose" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "close-tank-2", mixOperator), "Closure/vacuum verified; Sucrose addition started")}>Close Tank · Establish Vacuum</button>}
+                  {batch.phase === "Confirm Sucrose Bulk Add" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-sucrose", mixOperator), "Sucrose addition confirmed; automatic check weight started")}>Confirm Sucrose Add</button>}
+                  {batch.phase === "Open Tank - API / Flavor" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "open-tank-3", mixOperator), "Tank opened for API and approved flavor")}>Open Tank · Verify Safe Add</button>}
+                  {batch.phase === "Controlled API Addition" && <><p className="interlock-note">Scan Prednisolone identity/lot before confirming the API addition.</p><button className="button primary" disabled={!currentManualVerified} onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-api", mixOperator), "Prednisolone API addition confirmed")}>Confirm Prednisolone Add</button></>}
+                  {batch.phase === "Flavor Addition" && <><p className="interlock-note">Scan the flavor locked to this PO before confirming its addition.</p><button className="button primary" disabled={!currentManualVerified} onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-flavor", mixOperator), "Approved flavor addition confirmed")}>Confirm Approved Flavor Add</button></>}
+                  {batch.phase === "Dye Premix Transfer" && <><p className="interlock-note">This approved material requires dye. Qualified PMX-01 must be COMPLETE before transfer.</p><button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-dye-premix", mixOperator), "Approved dye premix transfer reported to MES")}>Confirm Premix Add</button></>}
+                    </>
                   )}
-                  {batch.phase === "Manual Additions" && <button className="button primary" onClick={() => void runMixAction(() => api.mixAction(batch.batch_id, "confirm-manual-adds", mixOperator), "Manual additions confirmed")}>Confirm Manual Adds Complete</button>}
-                  {batch.phase === "Premix Required" && premix?.status !== "Complete" && <button className="button secondary" onClick={() => void runMixAction(() => api.startPremix(batch.batch_id, mixOperator), "Premix automatic sequence started")}>Start Premix</button>}
-                  {batch.phase === "Premix Required" && <button className="button primary" onClick={() => void runMixAction(() => api.confirmPremix(batch.batch_id, mixOperator), "Premix confirmed and charged")}>Confirm Premix Complete</button>}
+
+                  {batch.phase.startsWith("Weight Check -") && (
+                    <div className="premix-panel">
+                      <div>
+                        <strong>Automatic Check Weight</strong>
+                        <span>RUNNING</span>
+                      </div>
+                      <p>
+                        Addition confirmed. Vessel mass is {batch.mass_kg.toFixed(3)} kg.
+                        The load-cell check is executing automatically.
+                      </p>
+                      <progress value={batch.progress} max={100} />
+                      <small>
+                        CHECK WEIGHT · {Math.round(batch.progress)}% · MES remains interlocked until the tolerance check passes.
+                      </small>
+                    </div>
+                  )}
+
+                  {batch.phase.startsWith("Weight Exception -") && (
+                    <>
+                      <p className="interlock-note">
+                        MES ERROR · Check weight is outside the allowed tolerance.
+                        Sequence is interlocked until Automation Override and QA Approval are both recorded.
+                      </p>
+                      <button
+                        className="button warning"
+                        onClick={() =>
+                          void runMixAction(
+                            () => api.mixPhaseAction(batch.batch_id, "automation-weight-override", "Automation Engineer"),
+                            "Automation override recorded",
+                          )
+                        }
+                      >
+                        Automation Override
+                      </button>
+                      <button
+                        className="button warning"
+                        onClick={() =>
+                          void runMixAction(
+                            () => api.mixPhaseAction(batch.batch_id, "qa-weight-approve", "QA Reviewer"),
+                            "QA exception approval recorded",
+                          )
+                        }
+                      >
+                        QA Approve Weight Exception
+                      </button>
+                    </>
+                  )}
+
+                  {batch.phase.startsWith("MES Report -") && (
+                    <div className="premix-panel">
+                      <div>
+                        <strong>MES Transaction</strong>
+                        <span>REPORTING</span>
+                      </div>
+                      <p>
+                        Check weight passed. Material, lot, vessel mass, equipment,
+                        and execution details are being transmitted automatically to MES.
+                      </p>
+                      <progress value={batch.progress} max={100} />
+                      <small>
+                        REPORTING TO MES · {Math.round(batch.progress)}% · Operator signature releases after MES acceptance.
+                      </small>
+                    </div>
+                  )}
+
+                  {batch.phase.startsWith("Operator Sign -") && (
+                    <>
+                      <p className="interlock-note">
+                        CHECK WEIGHT PASSED · MES ACCEPTED. Electronic operator signature is required before the next material or phase is released.
+                      </p>
+                      <button
+                        className="button primary"
+                        onClick={() =>
+                          void runMixAction(
+                            () => api.mixPhaseAction(batch.batch_id, "operator-sign-addition", mixOperator),
+                            "Operator electronic signature recorded; next phase released",
+                          )
+                        }
+                      >
+                        Operator Sign
+                      </button>
+                    </>
+                  )}
+
+                  {batch.phase === "Close Tank - Final Agitation" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "close-tank-3", mixOperator), "Closure/vacuum verified; final agitation started")}>Close Tank · Establish Vacuum</button>}
+                  {batch.phase === "Confirm Final Agitation" && <button className="button primary" onClick={() => void runMixAction(() => api.mixPhaseAction(batch.batch_id, "confirm-final-agitation", mixOperator), "Final qualified agitation confirmed")}>Verify Qualified Mix · Sign</button>}
+                  {premix?.status === "Awaiting Premix Water" && <button className="button primary" onClick={() => void runMixAction(() => api.confirmPremixWater(batch.batch_id, "premix", mixOperator), "10 kg premix-pot water verified; main tank unchanged")}>Confirm 10 kg Premix Water</button>}
+                  {premix?.status === "Awaiting Rinse Water" && <button className="button primary" onClick={() => void runMixAction(() => api.confirmPremixWater(batch.batch_id, "rinse", mixOperator), "10 kg rinse-pot water verified; main tank unchanged")}>Confirm 10 kg Rinse Water</button>}
+                  {premix?.status === "Ready for Agitation" && <button className="button primary" onClick={() => void runMixAction(() => api.startPremix(batch.batch_id, mixOperator), "Premix agitation started after both water pots verified")}>Start Premix Agitation</button>}
+                  {premix?.status?.startsWith("Faulted") && <button className="button warning" onClick={() => void runMixAction(() => api.startPremix(batch.batch_id, mixOperator), "Premix fault acknowledged; qualified timer resumed")}>Acknowledge Premix Fault · Restore 850 RPM</button>}
+                  {premix?.status === "Awaiting Confirmation" && <button className="button secondary" onClick={() => void runMixAction(() => api.confirmPremix(batch.batch_id, mixOperator), "Premix qualified time confirmed")}>Confirm Premix Completed</button>}
                   {batch.status === "Ready for Transfer" && <button className="button primary" onClick={() => void runMixAction(() => api.mixAction(batch.batch_id, "start-transfer", mixOperator), "Automatic transfer started")}>Start Automatic Transfer</button>}
                   {batch.status === "Sample Hold" && <button className="button primary" onClick={() => void runMixAction(() => api.mixAction(batch.batch_id, "collect-sample", mixOperator), "LIMS transfer sample collected")}>Collect Transfer Sample</button>}
                   {batch.status === "Awaiting Termination" && <button className="button primary" onClick={() => void runMixAction(() => api.terminateMixBatch(batch.batch_id, mixOperator), "Batch terminated; hold tank placed on QA Hold")}>Terminate Batch</button>}
                 </div>
 
+                {(mixWorkspace?.materials?.length ?? 0) > 0 && (
+                  <div className="premix-panel">
+                    <div>
+                      <strong>Current PO Material Execution · {batch.po_number}</strong>
+                      <span>{mixWorkspace?.materials?.length ?? 0} materials</span>
+                    </div>
+                    {(mixWorkspace?.materials ?? []).map((item) => (
+                      <p key={`${item.material_code}-${item.material_lot ?? "pending"}`}>
+                        <strong>{item.material_name}</strong>
+                        {" · "}{item.material_lot ?? "lot pending"}
+                        {" · "}{item.actual_quantity ?? item.required_quantity} {item.unit_of_measure}
+                        {" · "}{item.weighing_status}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {premix && (
                   <div className="premix-panel">
-                    <div><strong>Premix Skid</strong><span>{premix.status}</span></div>
+                    <div><strong>Dye Premix · PMX-01</strong><span>{premix.status}</span></div>
                     <progress max="100" value={premix.progress} />
-                    <p>{premix.progress}% recipe progress · {premix.level_percent.toFixed(1)}% vessel level · {premix.rpm} RPM</p>
+                    <p>{premix.progress}% qualified mix time · {premix.level_percent.toFixed(1)}% vessel level · {premix.rpm} RPM</p>
+                    <small>Target 850 RPM · qualified range 825–875 RPM. Fault time does not count toward required mixing time.</small>
                   </div>
                 )}
               </div>
@@ -1776,8 +2950,54 @@ try {
   }
 
   async function runShipmentAction(shipmentId: string, action: string) {
-    await runAction(() => api.shipmentAction(shipmentId, action, { operator: "Warehouse Operator", seal_number: sealNumber, signature: "Warehouse Supervisor" }), `Shipment ${action} completed`);
-    await refresh();
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const updated = await api.shipmentAction(
+        shipmentId,
+        action,
+        {
+          operator: "Warehouse Operator",
+          seal_number: sealNumber,
+          signature: "Warehouse Supervisor",
+        },
+      );
+
+      // The shipment action response is the authoritative post-commit state.
+      // Update the queue immediately instead of waiting for a full-platform
+      // refresh. The old implementation refreshed twice and could leave the
+      // Shipping card on the pre-action "Verified" snapshot even though the
+      // backend had already returned "Loaded".
+      setShipments((current) =>
+        current.map((item) =>
+          item.shipment_id === shipmentId ? (updated as T.Shipment) : item,
+        ),
+      );
+
+      const actionMessage =
+        action === "load"
+          ? "Shipment load completed"
+          : action === "verify"
+            ? "Shipment verification completed"
+            : action === "seal"
+              ? "Trailer sealed"
+              : action === "ship"
+                ? "Shipment completed"
+                : `Shipment ${action} completed`;
+
+      setNotice(actionMessage);
+
+      // Refresh the rest of the platform after the local authoritative update.
+      // If a global refresh is already in flight, the card still remains correct
+      // because its state was updated directly from the action response.
+      await refresh();
+    } catch (actionError) {
+      setError(errorMessage(actionError));
+    } finally {
+      setBusy(false);
+    }
   }
 
   function renderBulkZone() {
@@ -1835,7 +3055,7 @@ try {
 
   function renderPackagingZone() {
     const run = packagingWorkspace?.run;
-    const routePo = productionOrders.find((po) => po.po_number === (run?.po_number ?? packagingQueue[0]?.po_number));
+    const routePo = productionOrders.find((po) => po.po_number === (run?.po_number ?? selectedPackagingPo));
     const grossBottleCount = run?.bottles_completed ?? 0;
     const rejectedBottleCount = run?.rejects ?? 0;
     const finalGoodBottleCount = Math.max(0, grossBottleCount - rejectedBottleCount);
@@ -1852,6 +3072,7 @@ try {
           <article><span>Active Runs</span><strong>{packagingRuns.filter((item) => ["Running", "Faulted", "Awaiting FG Sample", "FG QA Hold"].includes(item.status)).length}</strong></article>
           <article><span>FG QA Tasks</span><strong>{qaFgTasks.filter((task) => task.status === "Pending Review").length}</strong></article>
         </div>
+        <div className="packaging-component-strip"><strong>Line-side packaging components:</strong>{packagingComponents.length ? packagingComponents.map((item) => <span key={item.material_code}>{item.material_name} · {item.available_quantity.toLocaleString()} {item.unit_of_measure}</span>) : <span>Awaiting packaging component master data in ees_data_platform</span>}<small>Packaging components are read from Supply and are excluded from formulation weigh-room tickets.</small></div>
         <SectionCard title="Packaging Line Work Centers" eyebrow="Grey Zone Campaign Scheduling">
           <div className="hold-tank-grid">
             {packagingLines.map((line) => (
@@ -1865,13 +3086,43 @@ try {
           </div>
           <div className="form-grid compact">
             <label>Operator<input value={packagingOperator} onChange={(event) => setPackagingOperator(event.target.value)} /></label>
-            <button className="button primary" onClick={() => void runAction(openPackagingRun, "Packaging run opened")}>Open Scheduled Campaign</button>
+            <button
+              className="button primary"
+              onClick={() =>
+                void runAction(
+                  openPackagingRun,
+                  packagingLines.find(
+                    (line) => line.line_code === selectedPackagingLine,
+                  )?.active_po &&
+                    activePackagingRunForLine(
+                      selectedPackagingLine,
+                      packagingLines.find(
+                        (line) => line.line_code === selectedPackagingLine,
+                      )?.active_po,
+                    )
+                    ? `Current ${selectedPackagingLine} PO resumed`
+                    : "Packaging run opened",
+                )
+              }
+            >
+              {packagingLines.find(
+                (line) => line.line_code === selectedPackagingLine,
+              )?.active_po &&
+              activePackagingRunForLine(
+                selectedPackagingLine,
+                packagingLines.find(
+                  (line) => line.line_code === selectedPackagingLine,
+                )?.active_po,
+              )
+                ? `Resume Current ${selectedPackagingLine} PO`
+                : selectedPackagingPo ? `Open ${selectedPackagingPo} on ${selectedPackagingLine}` : "Select PO to Open"}
+            </button>
           </div>
         </SectionCard>
         <div className="zone-two-column">
           <SectionCard title="Packaging Queue" eyebrow="QA-Released Bulk">
             <div className="queue-list">
-              {packagingQueue.map((po) => <article key={po.id} className="queue-item"><div><strong>{po.po_number}</strong><span>{po.packaging_line}</span></div><p>{po.product_name}</p><small>{po.batch_number} · {po.quantity} bottles</small></article>)}
+              {packagingQueue.map((po) => <button type="button" key={po.id} className={`queue-item ${selectedPackagingPo === po.po_number ? "selected" : ""}`} onClick={() => { setSelectedPackagingPo(po.po_number); setSelectedPackagingLine(po.packaging_line); setSelectedPackagingRun(""); setPackagingWorkspace(null); }}><div><strong>{po.po_number}</strong><span>{selectedPackagingPo === po.po_number ? "Selected" : po.packaging_line}</span></div><p>{po.product_name}</p><small>{po.batch_number} · {po.quantity} bottles · scheduled {po.packaging_line}</small></button>)}
               {!packagingQueue.length && <p className="empty-state">Release bulk from QA to populate the packaging queue.</p>}
             </div>
             {routePo && (
@@ -2012,61 +3263,164 @@ try {
     );
   }
 
+  async function createRndSample() {
+    const allMaterials = [...(rndCatalog?.materials ?? []), ...(rndCatalog?.candidates ?? [])];
+    const selectedMaterials = rndMaterialCodes
+      .map((code) => allMaterials.find((item) => item.material_code === code))
+      .filter(Boolean)
+      .map((item, index) => ({
+        material_code: item!.material_code,
+        material_name: item!.material_name,
+        quantity: index === 0 ? 1 : 0.25,
+        unit: item!.unit_of_measure || "kg",
+        role: /flavor/i.test(item!.material_type) || /cherry|grape|berry|strawberry/i.test(item!.material_name) ? "flavor" : /dye|fd&c/i.test(item!.material_name) ? "dye" : "manual",
+        source: item!.qualification_status === "approved" ? "approved" : "R&D candidate",
+      }));
+    const selectedBulks = (rndCatalog?.bulks ?? [])
+      .filter((item) => rndBulkTanks.includes(item.tank_code))
+      .map((item) => ({
+        tank_code: item.tank_code,
+        material_code: item.material_code,
+        material_name: item.material_name,
+        // R&D uses a 1% scale of the locked production bulk recipe.
+        quantity_kg:
+          item.tank_code === "SUC-101"
+            ? 21.75
+            : item.tank_code === "GLY-101"
+              ? 9.2
+              : item.tank_code === "PG-101"
+                ? 7.5
+                : item.tank_code === "HFCS-101"
+                  ? 180
+                  : item.tank_code === "TANK-X"
+                    ? 180
+                    : 0,
+      }));
+
+    await runAction(async () => {
+      const created = await api.createRndSampleBatch({
+        formula_name: rndFormulaName,
+        flavor: rndFlavor,
+        dye: rndDye,
+        scale_l: rndScale,
+        materials: selectedMaterials,
+        bulks: selectedBulks,
+        process: {
+          agitation_rpm: rndAgitationRpm,
+          agitation_minutes: rndAgitationMinutes,
+          premix_rpm: rndPremixRpm,
+          premix_minutes: rndPremixMinutes,
+          vacuum_required: rndVacuum,
+          target_temperature_c: 22,
+          addition_sequence: [...selectedBulks.map((b) => b.material_name), ...selectedMaterials.map((m) => m.material_name)],
+        },
+      });
+      setRndSamples((current) => [created, ...current]);
+    }, "R&D full test PO created");
+  }
+
+  async function updateRndSample(id: string, action: string) {
+    await runAction(async () => {
+      const updated = await api.rndSampleAction(id, action, rndResult);
+      setRndSamples((current) => current.map((item) => item.sample_batch_id === id ? updated : item));
+    }, `R&D sample ${action.replaceAll("-", " ")} recorded`);
+  }
+
   function renderRndZone() {
-    const developmentOrders = productionOrders.slice(0, 6);
-    const linkedEvents = events.filter((event) => /formula|trial|sample|change|development|scale/i.test(`${event.event_type} ${event.message}`)).slice(0, 8);
+    const allRndMaterials = [...(rndCatalog?.materials ?? []), ...(rndCatalog?.candidates ?? [])];
+    const candidateCodes = new Set((rndCatalog?.candidates ?? []).map((item) => item.material_code));
+    const toggleMaterial = (code: string) => setRndMaterialCodes((current) => current.includes(code) ? current.filter((x) => x !== code) : [...current, code]);
+    const toggleBulk = (tank: string) => setRndBulkTanks((current) => current.includes(tank) ? current.filter((x) => x !== tank) : [...current, tank]);
 
     return (
       <div className="zone-stack">
-        <section className="zone-hero">
+        <div className="zone-hero">
           <div>
-            <p className="eyebrow">Research, Pilot & Scale-Up</p>
+            <span className="eyebrow">Development MES · R&D WR → R&D MR → R&D PL</span>
             <h1>Research & Development Laboratory</h1>
-            <p>Manage formulation evidence, pilot-batch readiness, experimental material requests, and controlled handoff into commercial production.</p>
+            <p>Build a complete development PO from approved plant materials and candidate materials, execute a controlled laboratory workflow, then approve, require more testing, or reject the formulation.</p>
           </div>
-          <div className="hero-status-grid">
-            <article><span>Linked Programs</span><strong>{developmentOrders.length}</strong></article>
-            <article><span>Open Evidence</span><strong>{linkedEvents.length}</strong></article>
-            <article><span>Scale-Up Ready</span><strong>{developmentOrders.filter((po) => /qa|packag|ship|closed/i.test(po.status)).length}</strong></article>
-          </div>
-        </section>
+        </div>
 
-        <div className="zone-two-column">
-          <SectionCard title="Formulation & Pilot Portfolio" eyebrow="Development Programs">
-            <div className="approval-list">
-              {developmentOrders.map((po) => (
-                <article key={po.id} className="approval-card">
-                  <div><strong>{po.product_name}</strong><span>{po.status}</span></div>
-                  <p>{po.po_number} · {po.batch_number}</p>
-                  <small>Route: {po.weigh_room} → {po.mix_tank} → {po.hold_tank} → {po.packaging_line}</small>
-                </article>
-              ))}
-              {!developmentOrders.length && <p className="empty-state">No formulation or pilot programs are linked yet.</p>}
+        <div className="zone-columns">
+          <SectionCard title="R&D Full Test PO Builder" eyebrow="Formula · Materials · Bulk · Process Logic">
+            <div className="form-grid">
+              <label className="wide">Development Formula Name<input value={rndFormulaName} onChange={(e)=>setRndFormulaName(e.target.value)} /></label>
+              <label>Target Flavor<input value={rndFlavor} onChange={(e)=>setRndFlavor(e.target.value)} /></label>
+              <label>Sample Scale<input type="number" min="1" max="500" value={rndScale} onChange={(e)=>setRndScale(Number(e.target.value))} /></label>
+              <label>Final Agitation RPM<input type="number" value={rndAgitationRpm} onChange={(e)=>setRndAgitationRpm(Number(e.target.value))} /></label>
+              <label>Final Agitation Minutes<input type="number" value={rndAgitationMinutes} onChange={(e)=>setRndAgitationMinutes(Number(e.target.value))} /></label>
+              <label>Premix RPM<input type="number" value={rndPremixRpm} onChange={(e)=>setRndPremixRpm(Number(e.target.value))} /></label>
+              <label>Premix Minutes<input type="number" value={rndPremixMinutes} onChange={(e)=>setRndPremixMinutes(Number(e.target.value))} /></label>
+              <label className="wide checkbox-field"><input type="checkbox" checked={rndVacuum} onChange={(e)=>setRndVacuum(e.target.checked)} /> Closed-tank vacuum required</label>
             </div>
+
+            <div className="route-request-panel">
+              <strong>Selectable R&D Materials</strong>
+              <p className="subtext">Approved materials and development candidates are both visible. Candidate materials remain R&D-controlled until a successful trial is approved.</p>
+              <div className="approval-grid">
+                {allRndMaterials.map((item) => (
+                  <label key={item.material_code} className="checkbox-field">
+                    <input type="checkbox" checked={rndMaterialCodes.includes(item.material_code)} onChange={()=>toggleMaterial(item.material_code)} />
+                    <span><strong>{item.material_name}</strong><small>{item.material_code} · {candidateCodes.has(item.material_code) ? "R&D EVALUATION REQUIRED" : "Approved plant material"}</small></span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="route-request-panel">
+              <strong>Development Bulk Usage</strong>
+              <p className="subtext">R&D may build recipes using normal bulk tanks, HSCF alternate/special bulk, or BULK-X overage storage.</p>
+              <div className="approval-grid">
+                {(rndCatalog?.bulks ?? []).map((tank) => (
+                  <label key={tank.tank_code} className="checkbox-field">
+                    <input type="checkbox" checked={rndBulkTanks.includes(tank.tank_code)} onChange={()=>toggleBulk(tank.tank_code)} />
+                    <span><strong>{tank.tank_code} · {tank.material_name}</strong><small>{tank.quantity_kg.toFixed(1)} kg available · {tank.qa_status} · {tank.status}</small></span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <button className="button primary wide" onClick={()=>void createRndSample()}>Create Full R&D Test PO</button>
           </SectionCard>
 
-          <SectionCard title="Scale-Up Readiness" eyebrow="Controlled Handoff">
-            <div className="planned-checklist">
-              <span>Formulation and material rationale</span>
-              <span>Pilot-batch evidence and sample linkage</span>
-              <span>Critical process parameter recommendations</span>
-              <span>Change-control and production handoff notes</span>
+          <SectionCard title="R&D Execution Queue" eyebrow="Request → Staging → WR → MR → PL → Test">
+            <label className="wide">Development Result / Technical Note<input value={rndResult} onChange={(event) => setRndResult(event.target.value)} /></label>
+            <div className="approval-stack">
+              {rndSamples.map((sample) => {
+                const materials = (()=>{try{return JSON.parse(sample.materials_json||"[]")}catch{return []}})();
+                const bulks = (()=>{try{return JSON.parse(sample.bulk_json||"[]")}catch{return []}})();
+                const process = (()=>{try{return JSON.parse(sample.process_json||"{}")}catch{return {}}})();
+                return (
+                  <article key={sample.sample_batch_id} className="approval-card">
+                    <div className="approval-card__header"><div><strong>{sample.test_po_number ?? sample.sample_batch_id}</strong><span>{sample.formula_name ?? sample.formula_code}</span></div><span className="status-chip">{sample.status}</span></div>
+                    <p>{sample.product_name} · Revision {sample.revision_no} · {sample.scale_l} development scale</p>
+                    <small>{materials.length} formulation materials · {bulks.length} bulk selections · Agitation {process.agitation_rpm ?? sample.agitation_rpm} RPM / {process.agitation_minutes ?? sample.agitation_minutes} min</small>
+                    {sample.promoted_material_number && <p className="success-message">Promoted to Office: {sample.promoted_material_number}</p>}
+                    <div className="button-row">
+                      {sample.status === "Draft" && <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"request-materials")}>Raise R&D Material Request</button>}
+                      {sample.status === "Warehouse Requested" && <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"receive-staging")}>Receive at R&D Staging</button>}
+                      {sample.status === "R&D Staging" && <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"weigh")}>Execute R&D WR</button>}
+                      {sample.status === "R&D WR" && <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"mix")}>Execute R&D MR</button>}
+                      {sample.status === "R&D MR" && <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"pack")}>Execute R&D PL</button>}
+                      {sample.status === "R&D PL" && <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"start-test")}>Start Sample Testing</button>}
+                      {sample.status === "Test Run" && <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"complete-test")}>Complete Testing</button>}
+                      {sample.status === "Test Complete" && <>
+                        <button className="button primary" onClick={()=>void updateRndSample(sample.sample_batch_id,"approve")}>Approve Formula</button>
+                        <button className="button secondary" onClick={()=>void updateRndSample(sample.sample_batch_id,"more-testing")}>Requires More Testing</button>
+                        <button className="button secondary" onClick={()=>void updateRndSample(sample.sample_batch_id,"reject")}>Reject</button>
+                      </>}
+                    </div>
+                  </article>
+                );
+              })}
+              {!rndSamples.length && <p className="empty-state">No R&D development POs yet.</p>}
             </div>
-            <p className="subtext">R&D remains separate from QA: R&D develops and recommends; QA independently reviews and releases.</p>
           </SectionCard>
         </div>
 
-        <SectionCard title="Development Evidence Timeline" eyebrow="Samples, Trials & Change Recommendations">
-          <div className="approval-list">
-            {linkedEvents.map((event) => (
-              <article key={event.id} className="approval-card">
-                <div><strong>{event.event_type}</strong><span>{event.source}</span></div>
-                <p>{event.message}</p>
-                <small>{event.entity_id || "Enterprise"} · {new Date(event.created_at).toLocaleString()}</small>
-              </article>
-            ))}
-            {!linkedEvents.length && <p className="empty-state">Development evidence will appear as trials, samples, and change recommendations are recorded.</p>}
-          </div>
+        <SectionCard title="R&D Approval Gate" eyebrow="Production Formula Promotion">
+          <p className="subtext">Only formulations with an R&D disposition of APPROVED are promoted to the MES formulation master and become selectable in Office. Requires More Testing and Rejected trials remain visible in development history but cannot be scheduled for commercial production.</p>
         </SectionCard>
       </div>
     );
@@ -2082,7 +3436,24 @@ try {
 
 
   async function loadEbrDetail(poNumber: string) {
-    await runAction(async () => { setEbrDetail(await api.ebrDetail(poNumber)); }, `Loaded electronic batch record ${poNumber}`);
+    if (!poNumber) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const [ebr, mes] = await Promise.all([
+        api.ebrDetail(poNumber),
+        api.mesBatch(poNumber),
+      ]);
+      setCompliancePo(poNumber);
+      setEbrDetail(ebr);
+      setMesRecord(mes);
+      setNotice(`Loaded compliance record ${poNumber}`);
+    } catch (loadError) {
+      setError(errorMessage(loadError));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitBatchReview(poNumber: string, decision: string) {
@@ -2090,12 +3461,512 @@ try {
   }
 
   function renderComplianceZone() {
-    const filtered = ebrBatches.filter(x => !ebrSearch || `${x.po_number} ${x.batch_number} ${x.product_name}`.toLowerCase().includes(ebrSearch.toLowerCase()));
-    return <div className="zone-stack">
-      <div className="zone-summary-grid"><article><span>Batch Records</span><strong>{ebrBatches.length}</strong></article><article><span>Pending Reviews</span><strong>{batchReviews.filter(x => x.status === "Pending Review").length}</strong></article><article><span>Exceptions</span><strong>{ebrBatches.reduce((n, x) => n + x.exception_count, 0)}</strong></article><article><span>Audit Entries</span><strong>{auditTrail.length}</strong></article></div>
-      <SectionCard title="Electronic Batch Record" eyebrow="Searchable Batch Genealogy"><div className="form-grid compact"><label className="wide">Search PO, Batch, Product<input value={ebrSearch} onChange={e => setEbrSearch(e.target.value)} placeholder="PO-260742 or batch number" /></label></div><div className="table-wrap"><table><thead><tr><th>PO / Batch</th><th>Product</th><th>Status</th><th>Yield</th><th>Downtime</th><th>Exceptions</th><th>Review</th><th></th></tr></thead><tbody>{filtered.map(x => <tr key={x.po_number}><td><strong>{x.po_number}</strong><small className="subtext">{x.batch_number}</small></td><td>{x.product_name}</td><td>{x.status}</td><td>{x.yield_percent}%</td><td>{x.downtime_minutes} min</td><td>{x.exception_count}</td><td>{x.review_status}</td><td><button className="button secondary" onClick={() => void loadEbrDetail(x.po_number)}>Open EBR</button></td></tr>)}</tbody></table></div></SectionCard>
-      {ebrDetail && <><div className="zone-two-column"><SectionCard title={`Review by Exception · ${ebrDetail.summary.po_number}`} eyebrow="QA Batch Review"><div className="detail-list"><div><span>Batch</span><strong>{ebrDetail.summary.batch_number}</strong></div><div><span>Shipment</span><strong>{ebrDetail.summary.shipment_status}</strong></div><div><span>Exceptions</span><strong>{ebrDetail.summary.exception_count}</strong></div><div><span>Rejects</span><strong>{ebrDetail.summary.rejects}</strong></div></div><div className="form-grid compact"><label>Reviewer<input value={reviewer} onChange={e => setReviewer(e.target.value)} /></label><label>Electronic Signature<input value={reviewSignature} onChange={e => setReviewSignature(e.target.value)} /></label><label className="wide">Review Note<input value={reviewNote} onChange={e => setReviewNote(e.target.value)} /></label></div><div className="button-row"><button className="button primary" onClick={() => void submitBatchReview(ebrDetail.summary.po_number, "Approve")}>Approve Batch Record</button><button className="button secondary" onClick={() => void submitBatchReview(ebrDetail.summary.po_number, "Return")}>Return for Correction</button><button className="button secondary" onClick={() => void submitBatchReview(ebrDetail.summary.po_number, "Reject")}>Reject</button></div></SectionCard><SectionCard title="ALCOA+ Data Integrity" eyebrow="cGMP Record Controls"><div className="alcoa-grid">{Object.entries(ebrDetail.alcoa_plus).map(([key, value]) => <article key={key}><span>{key.replaceAll("_", " ")}</span><strong>{value ? "Verified" : "Review"}</strong></article>)}</div></SectionCard></div><SectionCard title="Exceptions" eyebrow="Review by Exception"><div className="approval-list">{ebrDetail.exceptions.map((x, i) => <article key={`${x.source}-${i}`} className="approval-card"><div><strong>{x.category}</strong><span>{x.status}</span></div><p>{x.description}</p><small>{x.source} · {x.severity}</small></article>)}{!ebrDetail.exceptions.length && <p className="empty-state">No exceptions recorded for this batch.</p>}</div></SectionCard><SectionCard title="Chronological Electronic Batch Record" eyebrow="Attributable, Contemporaneous Event History"><div className="timeline-list">{ebrDetail.timeline.map(e => <article key={e.id}><span>{formatDate(e.created_at)}</span><div><strong>{e.source} · {e.event_type}</strong><p>{e.message}</p></div></article>)}</div></SectionCard><SectionCard title="Audit Trail" eyebrow="Before / After · Reason · Actor · Signature"><div className="table-wrap"><table><thead><tr><th>Time</th><th>Action</th><th>Before</th><th>After</th><th>Reason</th><th>Actor</th></tr></thead><tbody>{ebrDetail.audit_trail.map(a => <tr key={a.id}><td>{formatDate(a.created_at)}</td><td>{a.action}</td><td>{a.before_value ?? "—"}</td><td>{a.after_value ?? "—"}</td><td>{a.reason}</td><td>{a.actor}</td></tr>)}</tbody></table></div></SectionCard></>}
-    </div>;
+    const filtered = ebrBatches.filter(
+      (x) =>
+        !ebrSearch ||
+        `${x.po_number} ${x.batch_number} ${x.product_name}`
+          .toLowerCase()
+          .includes(ebrSearch.toLowerCase()),
+    );
+
+    const selectedCip =
+      cipRuns.find((run) => run.cip_id === complianceCipId) ?? null;
+
+    const cipEvents = selectedCip
+      ? events
+          .filter(
+            (event) =>
+              event.entity_id === selectedCip.cip_id ||
+              event.entity_id === selectedCip.asset_code ||
+              event.message.includes(selectedCip.cip_id) ||
+              event.message.includes(selectedCip.asset_code),
+          )
+          .slice()
+          .sort(
+            (left, right) =>
+              new Date(left.created_at).getTime() -
+              new Date(right.created_at).getTime(),
+          )
+      : [];
+
+    // A historical PO can predate the mes.execution_events table. Keep that
+    // visible instead of presenting an apparently broken blank MES panel.
+    const mesEvents = mesRecord?.events ?? [];
+    const mesFallbackEvents =
+      mesEvents.length === 0 && ebrDetail
+        ? ebrDetail.timeline.map((event) => ({
+            event_id: `thread-${event.id}`,
+            event_timestamp: event.created_at,
+            phase: event.source,
+            event_type: event.event_type,
+            material_name: null,
+            metric: null,
+            lot_number: null,
+            material_code: null,
+            quantity: null,
+            value: null,
+            unit: null,
+            equipment_id: null,
+            operator_id: null,
+            qualified: event.severity !== "error" && event.severity !== "critical",
+            message: event.message,
+          }))
+        : [];
+
+    const displayedMesEvents =
+      mesEvents.length > 0 ? mesEvents : mesFallbackEvents;
+
+    return (
+      <div className="zone-stack">
+        <div className="zone-summary-grid">
+          <article>
+            <span>Batch Records</span>
+            <strong>{ebrBatches.length}</strong>
+          </article>
+          <article>
+            <span>MES Events</span>
+            <strong>{mesRecord?.events.length ?? 0}</strong>
+          </article>
+          <article>
+            <span>CIP Records</span>
+            <strong>{cipRuns.length}</strong>
+          </article>
+          <article>
+            <span>Audit Entries</span>
+            <strong>{auditTrail.length}</strong>
+          </article>
+        </div>
+
+        <SectionCard
+          title="Compliance Report Browser"
+          eyebrow="PO / MES / CIP Record Selection"
+        >
+          <div className="form-grid compact">
+            <label>
+              Production Order
+              <select
+                value={compliancePo}
+                onChange={(event) => {
+                  const po = event.target.value;
+                  setCompliancePo(po);
+                  if (po) void loadEbrDetail(po);
+                }}
+              >
+                <option value="">Select PO</option>
+                {ebrBatches.map((item) => (
+                  <option key={item.po_number} value={item.po_number}>
+                    {item.po_number} · {item.batch_number} · {item.status}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              CIP Record
+              <select
+                value={complianceCipId}
+                onChange={(event) => setComplianceCipId(event.target.value)}
+              >
+                <option value="">Select CIP run</option>
+                {cipRuns
+                  .slice()
+                  .sort(
+                    (left, right) =>
+                      new Date(right.created_at).getTime() -
+                      new Date(left.created_at).getTime(),
+                  )
+                  .map((run) => (
+                    <option key={run.cip_id} value={run.cip_id}>
+                      {run.cip_id} · {run.asset_code} · {run.status}
+                    </option>
+                  ))}
+              </select>
+            </label>
+
+            <label className="wide">
+              Search Batch Records
+              <input
+                value={ebrSearch}
+                onChange={(event) => setEbrSearch(event.target.value)}
+                placeholder="PO, batch number, or product"
+              />
+            </label>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Electronic Batch Records"
+          eyebrow="Selectable Batch Genealogy"
+        >
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>PO / Batch</th>
+                  <th>Product</th>
+                  <th>Status</th>
+                  <th>Yield</th>
+                  <th>Downtime</th>
+                  <th>Exceptions</th>
+                  <th>Review</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item) => (
+                  <tr key={item.po_number}>
+                    <td>
+                      <strong>{item.po_number}</strong>
+                      <small className="subtext">{item.batch_number}</small>
+                    </td>
+                    <td>{item.product_name}</td>
+                    <td>{item.status}</td>
+                    <td>{item.yield_percent}%</td>
+                    <td>{item.downtime_minutes} min</td>
+                    <td>{item.exception_count}</td>
+                    <td>{item.review_status}</td>
+                    <td>
+                      <button
+                        className="button secondary"
+                        onClick={() => void loadEbrDetail(item.po_number)}
+                      >
+                        Open Full Report
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+
+        {ebrDetail && (
+          <>
+            <div className="zone-two-column">
+              <SectionCard
+                title={`Review by Exception · ${ebrDetail.summary.po_number}`}
+                eyebrow="QA Batch Review"
+              >
+                <div className="detail-list">
+                  <div>
+                    <span>Batch</span>
+                    <strong>{ebrDetail.summary.batch_number}</strong>
+                  </div>
+                  <div>
+                    <span>Shipment</span>
+                    <strong>{ebrDetail.summary.shipment_status}</strong>
+                  </div>
+                  <div>
+                    <span>Exceptions</span>
+                    <strong>{ebrDetail.summary.exception_count}</strong>
+                  </div>
+                  <div>
+                    <span>Rejects</span>
+                    <strong>{ebrDetail.summary.rejects}</strong>
+                  </div>
+                </div>
+
+                <div className="form-grid compact">
+                  <label>
+                    Reviewer
+                    <input
+                      value={reviewer}
+                      onChange={(event) => setReviewer(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Electronic Signature
+                    <input
+                      value={reviewSignature}
+                      onChange={(event) => setReviewSignature(event.target.value)}
+                    />
+                  </label>
+                  <label className="wide">
+                    Review Note
+                    <input
+                      value={reviewNote}
+                      onChange={(event) => setReviewNote(event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className="button-row">
+                  <button
+                    className="button primary"
+                    onClick={() =>
+                      void submitBatchReview(
+                        ebrDetail.summary.po_number,
+                        "Approve",
+                      )
+                    }
+                  >
+                    Approve Batch Record
+                  </button>
+                  <button
+                    className="button secondary"
+                    onClick={() =>
+                      void submitBatchReview(
+                        ebrDetail.summary.po_number,
+                        "Return",
+                      )
+                    }
+                  >
+                    Return for Correction
+                  </button>
+                  <button
+                    className="button secondary"
+                    onClick={() =>
+                      void submitBatchReview(
+                        ebrDetail.summary.po_number,
+                        "Reject",
+                      )
+                    }
+                  >
+                    Reject
+                  </button>
+                </div>
+              </SectionCard>
+
+              <SectionCard
+                title="ALCOA+ Data Integrity"
+                eyebrow="cGMP Record Controls"
+              >
+                <div className="alcoa-grid">
+                  {Object.entries(ebrDetail.alcoa_plus).map(([key, value]) => (
+                    <article key={key}>
+                      <span>{key.replaceAll("_", " ")}</span>
+                      <strong>{value ? "Verified" : "Review"}</strong>
+                    </article>
+                  ))}
+                </div>
+              </SectionCard>
+            </div>
+
+            <SectionCard title="Exceptions" eyebrow="Review by Exception">
+              <div className="approval-list">
+                {ebrDetail.exceptions.map((item, index) => (
+                  <article
+                    key={`${item.source}-${index}`}
+                    className="approval-card"
+                  >
+                    <div>
+                      <strong>{item.category}</strong>
+                      <span>{item.status}</span>
+                    </div>
+                    <p>{item.description}</p>
+                    <small>{item.timestamp ? formatDate(item.timestamp) : "—"}</small>
+                  </article>
+                ))}
+                {!ebrDetail.exceptions.length && (
+                  <p className="empty-state">
+                    No review-by-exception records were recorded for this batch.
+                  </p>
+                )}
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Chronological Electronic Batch Record"
+              eyebrow="Attributable, Contemporaneous Event History"
+            >
+              <div className="timeline-list">
+                {ebrDetail.timeline.map((event) => (
+                  <article key={event.id}>
+                    <span>{formatDate(event.created_at)}</span>
+                    <div>
+                      <strong>
+                        {event.source} · {event.event_type}
+                      </strong>
+                      <p>{event.message}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title="Audit Trail"
+              eyebrow="Before / After · Reason · Actor · Signature"
+            >
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Action</th>
+                      <th>Before</th>
+                      <th>After</th>
+                      <th>Reason</th>
+                      <th>Actor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ebrDetail.audit_trail.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{formatDate(entry.created_at)}</td>
+                        <td>{entry.action}</td>
+                        <td>{entry.before_value ?? "—"}</td>
+                        <td>{entry.after_value ?? "—"}</td>
+                        <td>{entry.reason}</td>
+                        <td>{entry.actor}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+
+            <SectionCard
+              title={`MES Execution Record · ${ebrDetail.summary.po_number}`}
+              eyebrow="Material · Amount · Timestamp · Operator · Equipment"
+            >
+              {mesEvents.length === 0 && (
+                <p className="warning-text">
+                  No rows were returned from mes.execution_events for this PO.
+                  The chronological digital thread is displayed below as a
+                  compatibility report so the compliance record is never blank.
+                  The next clean E2E run should be used to verify native MES
+                  event persistence.
+                </p>
+              )}
+
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Phase / Event</th>
+                      <th>Material / Metric</th>
+                      <th>Amount / Value</th>
+                      <th>Equipment</th>
+                      <th>Operator</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedMesEvents.map((event) => (
+                      <tr key={event.event_id}>
+                        <td>{formatDate(event.event_timestamp)}</td>
+                        <td>
+                          <strong>{event.phase}</strong>
+                          <small className="subtext">{event.event_type}</small>
+                        </td>
+                        <td>
+                          {event.material_name ?? event.metric ?? "—"}
+                          <small className="subtext">
+                            {event.lot_number ?? event.material_code ?? ""}
+                          </small>
+                        </td>
+                        <td>
+                          {event.quantity ?? event.value ?? "—"} {event.unit ?? ""}
+                        </td>
+                        <td>{event.equipment_id ?? "—"}</td>
+                        <td>{event.operator_id ?? "—"}</td>
+                        <td>{event.qualified ? "Qualified" : "Exception"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {!displayedMesEvents.length && (
+                <p className="empty-state">
+                  No MES or digital-thread execution records are available for
+                  this PO.
+                </p>
+              )}
+            </SectionCard>
+          </>
+        )}
+
+        {selectedCip && (
+          <SectionCard
+            title={`CIP Execution Report · ${selectedCip.cip_id}`}
+            eyebrow="Asset · Phase · Timestamp · Operator · Faults · Signature"
+          >
+            <div className="detail-list">
+              <div>
+                <span>Asset</span>
+                <strong>
+                  {selectedCip.asset_code} · {selectedCip.asset_type}
+                </strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>{selectedCip.status}</strong>
+              </div>
+              <div>
+                <span>Current / Final Phase</span>
+                <strong>{selectedCip.phase}</strong>
+              </div>
+              <div>
+                <span>Progress</span>
+                <strong>{selectedCip.progress}%</strong>
+              </div>
+              <div>
+                <span>Operator</span>
+                <strong>{selectedCip.operator}</strong>
+              </div>
+              <div>
+                <span>Electronic Signature</span>
+                <strong>{selectedCip.signature ?? "Not yet signed"}</strong>
+              </div>
+              <div>
+                <span>Started</span>
+                <strong>{formatDate(selectedCip.created_at)}</strong>
+              </div>
+              <div>
+                <span>Completed</span>
+                <strong>
+                  {selectedCip.completed_at
+                    ? formatDate(selectedCip.completed_at)
+                    : "In progress"}
+                </strong>
+              </div>
+            </div>
+
+            {selectedCip.fault_code && (
+              <p className="warning-text">
+                {selectedCip.fault_code}: {selectedCip.fault_message}
+              </p>
+            )}
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Source</th>
+                    <th>Event</th>
+                    <th>Record</th>
+                    <th>Severity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cipEvents.map((event) => (
+                    <tr key={event.id}>
+                      <td>{formatDate(event.created_at)}</td>
+                      <td>{event.source}</td>
+                      <td>{event.event_type}</td>
+                      <td>{event.message}</td>
+                      <td>{event.severity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {!cipEvents.length && (
+              <p className="empty-state">
+                No digital-thread events for this CIP run are present in the
+                currently loaded event window. The run header above remains the
+                authoritative CIP record.
+              </p>
+            )}
+          </SectionCard>
+        )}
+      </div>
+    );
   }
 
   function renderReliabilityZone() {
@@ -2140,7 +4011,7 @@ try {
     const selectedBatch = ebrBatches.find((batch) => batch.po_number === replayPo) ?? ebrBatches[0];
     return <div className="zone-stack thread-zone">
       <SectionCard title="Batch Digital Thread Explorer" eyebrow="Lifecycle, Evidence & Replay" action={<select value={replayPo} onChange={(event) => { setReplayPo(event.target.value); setReplayIndex(0); setReplayPlaying(false); }}><option value="">All Enterprise Events</option>{productionOrders.map((po) => <option key={po.id} value={po.po_number}>{po.po_number} · {po.batch_number}</option>)}</select>}>
-        <div className="lifecycle-track">{["Office", "Warehouse", "Weigh", "Premix", "Mix", "Hold", "QA", "Packaging", "FG QA", "Shipping", "Closed"].map((stage, index) => <article key={stage} className={index <= Math.min(10, Math.floor((replayIndex / Math.max(1, replayEvents.length - 1)) * 10)) ? "complete" : "pending"}><span>{index + 1}</span><strong>{stage}</strong></article>)}</div>
+        <div className="lifecycle-track">{["Office", "Weigh PR", "Warehouse", "Vestibule", "Weigh", "Premix", "Mix", "Hold", "QA", "Packaging", "FG QA", "Shipping", "Closed"].map((stage, index) => <article key={stage} className={index <= Math.min(10, Math.floor((replayIndex / Math.max(1, replayEvents.length - 1)) * 10)) ? "complete" : "pending"}><span>{index + 1}</span><strong>{stage}</strong></article>)}</div>
         <div className="replay-console"><div className="replay-screen"><p className="eyebrow">Current Replay Event</p>{current ? <><h3>{current.source}</h3><p>{current.message}</p><small>{current.entity_type} · {current.entity_id} · {formatDate(current.created_at)}</small></> : <p>No events available for this selection.</p>}</div><div className="replay-controls"><button className="button secondary" onClick={() => setReplayIndex(Math.max(0, replayIndex - 1))}>Previous</button><button className="button primary" onClick={() => setReplayPlaying((playing) => !playing)}>{replayPlaying ? "Pause" : "Play"}</button><button className="button secondary" onClick={() => setReplayIndex(Math.min(replayEvents.length - 1, replayIndex + 1))}>Step</button><select value={replaySpeed} onChange={(event) => setReplaySpeed(Number(event.target.value))}><option value={1}>1×</option><option value={2}>2×</option><option value={5}>5×</option><option value={10}>10×</option></select><span>{replayEvents.length ? replayIndex + 1 : 0}/{replayEvents.length}</span></div><progress max={Math.max(1, replayEvents.length - 1)} value={replayIndex} /></div>
       </SectionCard>
       <div className="zone-two-column">

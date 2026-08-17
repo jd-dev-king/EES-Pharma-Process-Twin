@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { api } from "../lib/api";
+import { api, currentDemoSessionId } from "../lib/api";
 
 interface Props {
   onResetComplete: () => Promise<void> | void;
@@ -8,10 +8,11 @@ interface Props {
 
 export function ReleaseReadinessCenter({ onResetComplete }: Props) {
   const [operator, setOperator] = useState("Demo Administrator");
-  const [reason, setReason] = useState("Prepare a clean demonstration environment");
+  const [reason, setReason] = useState("Reset my current demonstration session");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [resetRequestId, setResetRequestId] = useState("");
   const [error, setError] = useState("");
 
   async function resetDemo() {
@@ -21,6 +22,7 @@ export function ReleaseReadinessCenter({ onResetComplete }: Props) {
     try {
       const result = await api.demoReset({ operator, reason, confirmation });
       setMessage(result.message);
+      setResetRequestId(result.request_id);
       setConfirmation("");
       await onResetComplete();
     } catch (resetError) {
@@ -40,17 +42,26 @@ export function ReleaseReadinessCenter({ onResetComplete }: Props) {
 
       <div className="zone-columns">
         <section className="section-card">
-          <div className="section-card-header"><div><p className="eyebrow">Controlled Demo Reset</p><h3>Reset Demonstration Environment</h3></div></div>
-          <p>This clears transactional simulator records, active faults, batches, deliveries, training sessions, CIP runs, and work orders while restoring seeded inventory and plant equipment. This action replaces deleting the local database during demonstrations.</p>
+          <div className="section-card-header"><div><p className="eyebrow">Session-Scoped Demo Reset</p><h3>Reset Current Demo Session</h3></div></div>
+          <p>This resets only the current browser demo session. Its campaign is closed, active equipment is released, and the reset request is recorded for Data Moon Admin review. Shared Warehouse quantities, global PO numbering, and other users' active demonstrations are not changed.</p>
+          <div className="planned-checklist">
+            <span>Session: {currentDemoSessionId()}</span>
+            <span>Shared inventory baseline: Data Moon Admin only</span>
+            <span>Global PO sequence reset: Data Moon Admin only</span>
+          </div>
           <div className="form-grid">
             <label>Operator<input value={operator} onChange={(event) => setOperator(event.target.value)} /></label>
             <label className="wide">Reason<input value={reason} onChange={(event) => setReason(event.target.value)} /></label>
             <label className="wide">Type RESET to confirm<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>
             <button className="button danger wide" disabled={busy || confirmation.trim().toUpperCase() !== "RESET"} onClick={() => void resetDemo()}>
-              {busy ? "Resetting…" : "Reset Demonstration Environment"}
+              {busy ? "Resetting Session…" : "Reset Current Demo Session"}
             </button>
           </div>
-          {message && <div className="success-banner">{message}</div>}
+          {message && <div className="success-banner">
+            <strong>{message}</strong>
+            <span>Session: {currentDemoSessionId()}</span>
+            {resetRequestId && <span>Data Moon Request: {resetRequestId}</span>}
+          </div>}
           {error && <div className="error-banner">{error}</div>}
         </section>
 

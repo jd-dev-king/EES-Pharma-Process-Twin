@@ -15,6 +15,28 @@ const BASE = configuredBase.endsWith("/api")
   ? configuredBase
   : `${configuredBase}/api`;
 
+const DEMO_SESSION_STORAGE_KEY = "ees_pharma_demo_session_id";
+
+function getDemoSessionId(): string {
+  let sessionId = localStorage.getItem(DEMO_SESSION_STORAGE_KEY);
+
+  if (!sessionId) {
+    const token =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    sessionId = `DEMO-${token}`;
+    localStorage.setItem(DEMO_SESSION_STORAGE_KEY, sessionId);
+  }
+
+  return sessionId;
+}
+
+export function currentDemoSessionId(): string {
+  return getDemoSessionId();
+}
+
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
     super(message);
@@ -29,6 +51,8 @@ async function request<R>(path: string, init: RequestInit = {}): Promise<R> {
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+
+  headers.set("X-EES-Demo-Session", getDemoSessionId());
 
   const response = await fetch(`${BASE}${path}`, {
     ...init,
@@ -55,7 +79,13 @@ export const api={
  trainingRoles:async()=> (await request<{roles:string[]}>("/training/roles")).roles,
  startTrainingSession:(role:string,difficulty:string)=>request<T.TrainingSession>("/training/session",{method:"POST",body:JSON.stringify({role,difficulty})}),
  advanceTrainingSession:(sessionId:string,correct=true,note="")=>request<T.TrainingSession>(`/training/session/${sessionId}/advance`,{method:"POST",body:JSON.stringify({correct,note})}),
+ formulationOptions:()=>request<T.FormulationOptions>("/office/formulation-options"),
+ nextPo:()=>request<{po_number:string}>("/office/next-po"),
+ formulationVariants:()=>request<{variants:T.FormulationVariant[]}>("/office/formulation-variants"),
  productionOrders:()=>request<T.ProductionOrder[]>("/office/production-orders"),
+ campaigns:()=>request<T.ProductionCampaign[]>("/office/campaigns"),
+ createCampaign:(po_numbers:string[])=>request<T.ProductionCampaign>("/office/campaigns",{method:"POST",body:JSON.stringify({po_numbers})}),
+ createProductionRun:(payload:T.ProductionOrderPayload,campaign_size:1|2|3|4)=>request<T.ProductionRunResponse>("/office/production-runs",{method:"POST",body:JSON.stringify({...payload,campaign_size})}),
  registerProductionOrder:(p:T.ProductionOrderPayload)=>request<T.ProductionOrder>("/office/register-po",{method:"POST",body:JSON.stringify(p)}),
  poWorkspace:(po:string)=>request<T.ProductionOrderWorkspace>(`/office/production-orders/${po}/workspace`),
  substitutions:()=>request<T.SubstitutionRequest[]>("/office/substitutions"),
@@ -64,6 +94,7 @@ export const api={
  warehouseAction:(to:string,action:string)=>request<T.WarehouseTransferOrder>(`/warehouse/queue/${to}/${action}`,{method:"POST",body:JSON.stringify({operator:"Warehouse Operator"})}),
  requestSubstitution:(po:string,material_code:string,proposed_lot:string)=>request<T.SubstitutionRequest>("/warehouse/substitutions",{method:"POST",body:JSON.stringify({po_number:po,material_code,proposed_lot,reason:"Scheduled lot unavailable or on QA hold"})}),
  events:()=>request<T.PlatformEvent[]>("/events?limit=40"),notifications:()=>request<T.NotificationRecord[]>("/notifications"),
+ mesBatch:(po:string)=>request<T.MESBatchRecord>(`/mes/batch/${po}`),
  checkSchedulerConflicts:(p:T.SchedulerConflictPayload)=>request<T.SchedulerConflictResponse>("/scheduler/check-conflicts",{method:"POST",body:JSON.stringify(p)}),
  bendIntoWeighRoom:(po_number:string,room_code:string,operator:string)=>request<T.WarehouseTransferOrder>("/weighing/bend",{method:"POST",body:JSON.stringify({po_number,room_code,operator})}),
  weighRooms:()=>request<T.WeighRoom[]>("/weighing/rooms"),
@@ -73,16 +104,38 @@ export const api={
  tareWeighTicket:(ticket:string,operator:string)=>request<T.WeighTicket>(`/weighing/tickets/${ticket}/tare`,{method:"POST",body:JSON.stringify({operator})}),
  verifyWeighBarcode:(ticket:string,barcode:string)=>request<T.WeighTicketLine>(`/weighing/tickets/${ticket}/verify-barcode`,{method:"POST",body:JSON.stringify({barcode})}),
  weighMaterial:(ticket:string,actual_quantity:number,operator:string)=>request<T.WeighTicket>(`/weighing/tickets/${ticket}/weigh`,{method:"POST",body:JSON.stringify({actual_quantity,operator})}),
+ requestWeighShortage:(p:{po_number:string;material_code:string;material_name:string;required_remaining:number;available_quantity:number;requester:string})=>request<{status:string;shortage:number}>("/weighing/shortage-request",{method:"POST",body:JSON.stringify(p)}),
  signWeighTicket:(ticket:string,signature:string)=>request<T.WeighTicket>(`/weighing/tickets/${ticket}/sign`,{method:"POST",body:JSON.stringify({signature})}),
+ materialPRs:()=>request<T.MaterialPR[]>("/weighing/material-prs"),
+ createMaterialPR:(po_number:string,campaign_id:string,operator:string,lines:T.MaterialPRLineDraft[])=>request<T.MaterialPR>("/weighing/material-prs",{method:"POST",body:JSON.stringify({po_number,campaign_id,operator,lines})}),
+ acceptCampaignWorkload:(campaign_id:string,operator:string)=>request<T.ProductionCampaign>(`/weighing/campaigns/${campaign_id}/accept`,{method:"POST",body:JSON.stringify({operator})}),
+ campaignPlantInventory:(campaign_id:string)=>request<T.CampaignPlantInventory>(`/weighing/campaigns/${campaign_id}/plant-inventory`),
+ campaignStagingReadiness:(campaign_id:string)=>request<any>(`/weighing/campaigns/${campaign_id}/staging-readiness`),
+ campaignWeighSequence:(campaign_id:string)=>request<any>(`/weighing/campaigns/${campaign_id}/weigh-sequence`),
+ syncCampaignWeighing:(campaign_id:string,room_code:string,operator:string)=>request<any>(`/weighing/campaigns/${campaign_id}/sync-weighing`,{method:"POST",body:JSON.stringify({room_code,operator})}),
+ bendCampaignToWeighRoom:(campaign_id:string,room_code:string,operator:string)=>request<any>(`/weighing/campaigns/${campaign_id}/bend-to-room`,{method:"POST",body:JSON.stringify({room_code,operator})}),
+ requestCampaignSeparation:(campaign_id:string,po_number:string,requester:string,reason:string)=>request<T.CampaignSeparationRequest>(`/weighing/campaigns/${campaign_id}/separation-request`,{method:"POST",body:JSON.stringify({po_number,requester,reason})}),
+ campaignSeparationRequests:()=>request<T.CampaignSeparationRequest[]>("/office/campaign-separation-requests"),
+ decideCampaignSeparation:(id:string,approved:boolean,note="")=>request<T.CampaignSeparationRequest>(`/office/campaign-separation-requests/${id}/decision`,{method:"POST",body:JSON.stringify({approved,decision_note:note})}),
+ requestWeighSubstitution:(po:string,material_code:string,proposed_lot:string)=>request<T.SubstitutionRequest>("/weighing/substitutions",{method:"POST",body:JSON.stringify({po_number:po,material_code,proposed_lot,reason:"Weigh operator requests approved alternative based on plant inventory shortage"})}),
+ requestRndAlternativeEvaluation:(payload:{campaign_id:string;po_number:string;original_material_code:string;candidate_code:string;requester:string;note:string})=>request<{status:string;candidate_code:string;candidate_name:string}>("/weighing/rnd-alternative-request",{method:"POST",body:JSON.stringify(payload)}),
+ materialPRWorkspace:(pr:string)=>request<T.MaterialPRWorkspace>(`/weighing/material-prs/${pr}`),
+ materialPositions:()=>request<T.MaterialPosition[]>("/inventory/positions"),
+ materialMovements:()=>request<T.MaterialMovement[]>("/inventory/movements"),
+ bendVestibuleToStaging:(container_id:string,operator:string)=>request<T.MaterialPosition>("/weighing/material-move/vestibule-to-staging",{method:"POST",body:JSON.stringify({container_id,operator})}),
+ bendStagingToRoom:(container_id:string,room_code:string,operator:string,po_number:string)=>request<T.MaterialPosition>("/weighing/material-move/staging-to-room",{method:"POST",body:JSON.stringify({container_id,room_code,operator,po_number})}),
  mixRooms:()=>request<T.MixRoom[]>("/mixing/rooms"),
  holdTanks:()=>request<T.HoldTank[]>("/mixing/hold-tanks"),
  mixQueue:()=>request<T.ProductionOrder[]>("/mixing/queue"),
  mixBatches:()=>request<T.MixBatch[]>("/mixing/batches"),
  openMixBatch:(po_number:string,room_code:string,operator:string)=>request<T.MixBatch>("/mixing/batches",{method:"POST",body:JSON.stringify({po_number,room_code,operator})}),
  mixWorkspace:(batchId:string)=>request<T.MixWorkspace>(`/mixing/batches/${batchId}`),
+ verifyMixReadiness:(batchId:string,operator="Process Engineer")=>request<T.MixBatch>(`/mixing/batches/${batchId}/verify-readiness`,{method:"POST",body:JSON.stringify({operator})}),
  mixAction:(batchId:string,action:string,operator="Process Engineer")=>request<T.MixBatch>(`/mixing/batches/${batchId}/${action}`,{method:"POST",body:JSON.stringify({operator})}),
  confirmBulkPg:(batchId:string,operator="Process Engineer")=>request<T.MixBatch>(`/mixing/batches/${batchId}/confirm-bulk-pg`,{method:"POST",body:JSON.stringify({operator})}),
+ mixPhaseAction:(batchId:string,action:string,operator="Process Engineer")=>request<T.MixBatch>(`/mixing/batches/${batchId}/phase/${action}`,{method:"POST",body:JSON.stringify({operator})}),
  tickMixBatch:(batchId:string)=>request<T.MixBatch>(`/mixing/batches/${batchId}/tick`,{method:"POST"}),
+ confirmPremixWater:(batchId:string,pot:"premix"|"rinse",operator:string)=>request<T.PremixRun>(`/mixing/batches/${batchId}/premix/water/${pot}`,{method:"POST",body:JSON.stringify({operator})}),
  startPremix:(batchId:string,operator:string)=>request<T.PremixRun>(`/mixing/batches/${batchId}/premix/start`,{method:"POST",body:JSON.stringify({operator})}),
  confirmPremix:(batchId:string,operator:string)=>request<T.MixBatch>(`/mixing/batches/${batchId}/premix/confirm`,{method:"POST",body:JSON.stringify({operator})}),
  selectHoldTank:(batchId:string,hold_tank:string)=>request<T.MixBatch>(`/mixing/batches/${batchId}/select-hold`,{method:"POST",body:JSON.stringify({hold_tank})}),
@@ -94,6 +147,11 @@ export const api={
  terminateMixBatch:(batchId:string,operator:string)=>request<T.MixBatch>(`/mixing/batches/${batchId}/terminate`,{method:"POST",body:JSON.stringify({operator})}),
  qaBulkTasks:()=>request<T.QABulkTask[]>("/quality/bulk-tasks"),
  decideQABulkTask:(taskId:string,disposition:"Release"|"Hold"|"Reject",note:string)=>request<T.QABulkTask>(`/quality/bulk-tasks/${taskId}/qa-disposition`,{method:"POST",body:JSON.stringify({disposition,note})}),
+ rndMaterialCatalog:()=>request<T.RnDMaterialCatalog>("/rnd/material-catalog"),
+ rndSampleBatches:()=>request<T.RnDSampleBatch[]>("/rnd/sample-batches"),
+ createRndSampleBatch:(payload:any)=>request<T.RnDSampleBatch>("/rnd/sample-batches",{method:"POST",body:JSON.stringify(payload)}),
+ rndSampleAction:(id:string,action:string,result="")=>request<T.RnDSampleBatch>(`/rnd/sample-batches/${id}/${action}`,{method:"POST",body:JSON.stringify({result})}),
+ packagingComponents:()=>request<T.PackagingComponent[]>("/packaging/components"),
  packagingLines:()=>request<T.PackagingLine[]>("/packaging/lines"),
  packagingQueue:()=>request<T.ProductionOrder[]>("/packaging/queue"),
  packagingRuns:()=>request<T.PackagingRun[]>("/packaging/runs"),
@@ -131,6 +189,15 @@ export const api={
  createBulkTransfer:(payload:any)=>request<T.BulkTransfer>("/bulk/transfers",{method:"POST",body:JSON.stringify(payload)}),
  verifyBulkTransfer:(id:string)=>request<T.BulkTransfer>(`/bulk/transfers/${id}/verify`,{method:"POST",body:JSON.stringify({identity_verified:true,qa_release_verified:true,hose_connected:true})}),
  bulkTransferAction:(id:string,action:string)=>request<T.BulkTransfer>(`/bulk/transfers/${id}/${action}`,{method:"POST"}),
- demoReset:(payload:{operator:string;reason:string;confirmation:string})=>request<{status:string;message:string;operator:string}>("/system/demo-reset",{method:"POST",body:JSON.stringify(payload)}),
+ demoReset:(payload:{operator:string;reason:string;confirmation:string})=>request<{
+ status:string;
+ message:string;
+ operator:string;
+ request_id:string;
+ session_id:string;
+ po_numbers:string[];
+ campaign_ids:string[];
+ admin_reconciliation_required:boolean;
+}>("/system/demo-reset",{method:"POST",body:JSON.stringify(payload)}),
 
-}
+};

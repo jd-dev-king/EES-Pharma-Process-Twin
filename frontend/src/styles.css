@@ -1154,3 +1154,344 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
     transform: translateY(-2px) !important;
   }
 }
+
+
+/* Pharma Process formulation / packaging / R&D patch */
+.packaging-component-strip,.rnd-sample-workflow{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap;padding:.8rem 1rem;border:1px solid rgba(75,185,220,.18);border-radius:12px;background:rgba(5,24,37,.72);color:#a8bbcd}.packaging-component-strip strong,.rnd-sample-workflow strong{color:#dce9f5}.packaging-component-strip span,.rnd-sample-workflow span{padding:.25rem .5rem;border-radius:999px;background:rgba(68,205,231,.09);font-size:.78rem}.packaging-component-strip small,.rnd-sample-workflow small{width:100%;color:var(--muted)}.premix-panel small{display:block;margin-top:.45rem;color:#9fb2c4}.premix-panel:has(span:first-of-type){position:relative}.mix-controls .button.warning{border-color:rgba(255,180,80,.55);color:#ffd18b;background:rgba(134,79,16,.22)}
+
+.current-step-panel{display:grid;gap:6px;padding:16px;border:1px solid rgba(68,201,255,.28);border-radius:12px;background:rgba(6,24,39,.72);margin:14px 0}.current-step-panel>span{font-size:.72rem;letter-spacing:.16em;color:#65d8ff;font-weight:800}.current-step-panel>strong{font-size:1.15rem}.current-step-panel>small{color:#8fa8bd;line-height:1.45}
+
+
+/* ============================================================
+   PAS-X focused material reconciliation
+   ============================================================ */
+.weigh-pr-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, .8fr) minmax(260px, 1.2fr);
+  gap: 12px;
+  margin: 14px 0;
+}
+.weigh-pr-toolbar label { min-width: 0; }
+
+.campaign-workload-strip,
+.pr-submit-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid rgba(126,179,226,.16);
+  border-radius: 13px;
+  background: rgba(7,20,34,.65);
+}
+.campaign-workload-strip > div { display:grid; gap:3px; margin-right:auto; }
+.campaign-workload-strip span { color:#8ea7be; }
+.pr-submit-strip { justify-content:space-between; margin-top:14px; }
+
+.material-chip-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.material-chip {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  padding: 10px;
+  color: #dcecff;
+  border: 1px solid rgba(126,179,226,.14);
+  background: rgba(6,18,31,.58);
+  border-radius: 11px;
+  cursor: pointer;
+}
+.material-chip strong, .material-chip span, .material-chip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.material-chip span { color:#b8c8d8; font-size:.82rem; }
+.material-chip small { color:#7f96ae; }
+.material-chip.selected { border-color:#44c9ff; box-shadow:0 0 0 2px rgba(68,201,255,.1); }
+.material-chip.complete { border-color:rgba(47,205,147,.42); }
+.material-chip.complete small { color:#88efc3; }
+
+.material-reconcile-panel {
+  display:grid;
+  gap:12px;
+  min-width:0;
+}
+.material-summary-strip {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+}
+.material-summary-strip > div {
+  padding:10px 12px;
+  border-radius:11px;
+  border:1px solid rgba(126,179,226,.13);
+  background:rgba(6,18,31,.5);
+  min-width:0;
+}
+.material-summary-strip span { display:block; color:#7892aa; font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; }
+.material-summary-strip strong { display:block; margin-top:4px; overflow:hidden; text-overflow:ellipsis; }
+
+.inventory-mode-tabs {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.inventory-mode-tabs button {
+  border:1px solid rgba(126,179,226,.18);
+  background:rgba(7,20,34,.7);
+  color:#a9bdd0;
+  border-radius:999px;
+  padding:8px 12px;
+  cursor:pointer;
+}
+.inventory-mode-tabs button.active { border-color:#44c9ff; color:#e7f7ff; background:rgba(68,201,255,.1); }
+
+.compact-inventory-section,
+.pr-draft-compact {
+  min-width:0;
+  padding:12px;
+  border:1px solid rgba(126,179,226,.13);
+  border-radius:12px;
+  background:rgba(6,18,31,.46);
+}
+.compact-inventory-section h4,
+.pr-draft-compact h4 { margin:0 0 8px; }
+
+.compact-lot-list {
+  display:grid;
+  gap:6px;
+  max-height:280px;
+  overflow:auto;
+}
+.compact-lot-row {
+  display:grid;
+  grid-template-columns:minmax(130px,1fr) minmax(130px,1.1fr) minmax(110px,.8fr) auto;
+  align-items:center;
+  gap:8px;
+  padding:8px 9px;
+  border:1px solid rgba(126,179,226,.11);
+  border-radius:9px;
+  background:rgba(5,15,27,.55);
+  min-width:0;
+}
+.compact-lot-row > * {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.compact-lot-row em { color:#ffd18a; font-style:normal; font-size:.75rem; }
+.compact-lot-row .button { padding:7px 9px; white-space:nowrap; }
+
+.full-inventory-details { margin-top:10px; }
+.full-inventory-details summary { cursor:pointer; color:#8cd5ff; margin-bottom:8px; }
+
+@media (max-width: 1100px) {
+  .weigh-pr-toolbar { grid-template-columns:1fr; }
+  .material-summary-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .compact-lot-row { grid-template-columns:1fr 1fr; }
+  .compact-lot-row .button { justify-self:start; }
+}
+@media (max-width: 700px) {
+  .material-summary-strip { grid-template-columns:1fr; }
+  .material-chip-row { grid-template-columns:1fr 1fr; }
+  .compact-lot-row { grid-template-columns:1fr; }
+}
+
+
+/* Controlled zone handoff */
+.zone-handoff-path {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:10px 12px;
+  margin-bottom:12px;
+  border:1px solid rgba(126,179,226,.14);
+  border-radius:12px;
+  background:rgba(5,15,27,.55);
+}
+.zone-handoff-path span {
+  padding:6px 9px;
+  border-radius:999px;
+  background:rgba(126,179,226,.07);
+  color:#9eb5c9;
+  font-size:.78rem;
+}
+.zone-handoff-path span.active { color:#ffd18a; border:1px solid rgba(255,209,138,.3); }
+.zone-handoff-path span.ready { color:#86efc0; border:1px solid rgba(55,210,151,.32); }
+.zone-handoff-path b { color:#46657d; }
+
+.handoff-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.campaign-bend-gate {
+  display:flex;
+  gap:14px;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  margin-top:12px;
+  padding:13px 14px;
+  border-radius:12px;
+  border:1px solid rgba(244,178,82,.26);
+  background:rgba(84,55,11,.12);
+}
+.campaign-bend-gate > div { display:grid; gap:3px; }
+.campaign-bend-gate span { color:#9eb5c9; max-width:760px; }
+.campaign-bend-gate.ready {
+  border-color:rgba(55,210,151,.32);
+  background:rgba(20,91,67,.12);
+}
+@media(max-width:1100px){
+  .handoff-grid{grid-template-columns:1fr;}
+}
+
+
+/* Explicit Vestibule -> Weigh Staging gate */
+.handoff-stage-block{display:grid;gap:12px;min-width:0;padding:14px;margin-top:12px;border:1px solid rgba(126,179,226,.14);border-radius:14px;background:rgba(5,15,27,.46)}
+.handoff-stage-block--attention{border-color:rgba(255,196,98,.34);background:rgba(96,61,12,.10)}
+.handoff-stage-block--ready{border-color:rgba(55,210,151,.30);background:rgba(17,92,66,.09)}
+.handoff-stage-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.handoff-stage-heading h3{margin:3px 0 5px}.handoff-stage-heading p{margin:0;color:#91a8bc;max-width:820px}
+.vestibule-bend-list{display:grid;gap:8px}
+.vestibule-bend-row{display:grid;grid-template-columns:minmax(150px,1.35fr) minmax(105px,.75fr) 22px minmax(120px,.8fr) auto;gap:10px;align-items:center;min-width:0;padding:10px 11px;border-radius:11px;border:1px solid rgba(126,179,226,.13);background:rgba(6,18,31,.62)}
+.vestibule-bend-row>div{min-width:0;display:grid;gap:2px}.vestibule-bend-row small{color:#7e96ac}
+.handoff-arrow{color:#52cff8;font-size:1.2rem;text-align:center}.bend-staging-button{white-space:normal!important;min-width:175px}.white-zone-bend-button{min-width:220px}
+.staging-two-column{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.staging-requirement-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:8px}
+.staging-requirement{display:grid;gap:2px;padding:9px 10px;border:1px solid rgba(244,178,82,.22);border-radius:10px;background:rgba(76,48,8,.08);min-width:0}
+.staging-requirement span,.staging-requirement small{color:#849cb2}.staging-requirement b{color:#ffd18a;font-size:.76rem}
+.staging-requirement.complete{border-color:rgba(55,210,151,.28);background:rgba(20,92,67,.08)}.staging-requirement.complete b{color:#86efc0}.ready-chip{color:#86efc0!important}
+@media(max-width:1000px){.vestibule-bend-row{grid-template-columns:1fr 1fr}.handoff-arrow{display:none}.bend-staging-button{grid-column:1/-1;width:100%}}
+@media(max-width:760px){.staging-two-column{grid-template-columns:1fr}.vestibule-bend-row{grid-template-columns:1fr}}
+
+.campaign-weigh-sequence-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 14px;margin-bottom:12px;border:1px solid rgba(68,201,255,.22);border-radius:13px;background:rgba(6,39,57,.18)}
+.campaign-weigh-sequence-banner>div:first-child{display:grid;gap:3px}.campaign-weigh-sequence-banner strong{color:#e7f5ff}.campaign-weigh-sequence-banner small{color:#8ca5ba}
+.campaign-weigh-next{display:grid;gap:2px;min-width:190px;padding:9px 11px;border-radius:10px;border:1px solid rgba(55,210,151,.24);background:rgba(20,92,67,.10)}
+.campaign-weigh-next span{color:#7f9aaf;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em}.campaign-weigh-next strong{color:#87efc0}
+
+
+/* ============================================================
+   Weighing HMI layout hotfix
+   Keep campaign sequence outside the queue/HMI grid so Scale HMI
+   retains its full right-hand workspace.
+   ============================================================ */
+.weighing-layout {
+  grid-template-columns: minmax(280px, .72fr) minmax(560px, 1.55fr) !important;
+  align-items: start;
+  width: 100%;
+}
+
+.weighing-layout > .section-card {
+  min-width: 0;
+  width: 100%;
+}
+
+.weighing-layout > .section-card:last-child {
+  min-width: 560px;
+}
+
+.weigh-hmi {
+  width: 100%;
+  min-width: 0;
+}
+
+.scale-selector {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  width: 100%;
+}
+
+.scale-selector .button {
+  width: 100%;
+  min-width: 0;
+  white-space: normal;
+  text-align: center;
+}
+
+.hmi-header {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.detail-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hmi-controls {
+  width: 100%;
+}
+
+.campaign-weigh-sequence-banner {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 14px;
+}
+
+@media (max-width: 1180px) {
+  .weighing-layout {
+    grid-template-columns: minmax(240px, .65fr) minmax(460px, 1.35fr) !important;
+  }
+  .weighing-layout > .section-card:last-child {
+    min-width: 460px;
+  }
+}
+
+@media (max-width: 900px) {
+  .weighing-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .weighing-layout > .section-card:last-child {
+    min-width: 0;
+  }
+  .scale-selector {
+    grid-template-columns: repeat(3, minmax(120px, 1fr)) !important;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 650px) {
+  .scale-selector {
+    grid-template-columns: 1fr !important;
+  }
+  .hmi-header,
+  .detail-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Campaign stale-ticket guard */
+.stale-campaign-hmi {
+  border: 1px solid rgba(255, 182, 72, .32);
+}
+.campaign-advance-interlock {
+  display: grid;
+  gap: 9px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 182, 72, .26);
+  background: rgba(91, 56, 8, .12);
+}
+.campaign-advance-interlock h3,
+.campaign-advance-interlock p {
+  margin: 0;
+}
+.campaign-advance-interlock p {
+  color: #9fb2c4;
+}
+.campaign-sync-button {
+  margin-top: 7px;
+  width: 100%;
+}

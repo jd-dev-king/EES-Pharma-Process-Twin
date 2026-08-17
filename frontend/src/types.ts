@@ -1,13 +1,13 @@
 export interface HealthResponse{status:string;app:string;version:string;database:string}
-export interface ProductionOrder{id:number;po_number:string;batch_number:string;product_name:string;quantity:number;status:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean;bulk_material:string;created_at:string}
-export interface MaterialComparison{material_code:string;material_name:string;required_quantity:number;unit:string;available_quantity:number;released_quantity:number;status:string;recommended_lot:string|null;warning:string|null}
+export interface ProductionOrder{id:number;po_number:string;batch_number:string;material_number:string;product_name:string;quantity:number;status:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean;bulk_material:string;created_at:string}
+export interface MaterialComparison{material_code:string;material_name:string;required_quantity:number;unit:string;available_quantity:number;released_quantity:number;status:string;recommended_lot:string|null;warning:string|null;recommended_substitute_material_code:string|null;recommended_substitute_material_name:string|null;recommended_substitute_lot:string|null;recommended_substitute_available:number|null}
 export interface MaterialRequirement{id:number;po_number:string;material_code:string;material_name:string;required_quantity:number;unit:string;assigned_lot:string|null;status:string}
 export interface ProductionOrderWorkspace{production_order:ProductionOrder;requirements:MaterialRequirement[];comparison:MaterialComparison[];ready_for_release:boolean}
 export interface InventoryLot{id:number;material_code:string;material_name:string;lot_number:string;quantity:number;reserved_quantity:number;unit:string;location:string;qa_status:string;expiration_date:string}
 export interface WarehouseTransferOrder{id:number;to_number:string;po_number:string;priority:string;destination:string;status:string;owner:string;progress:number;blocker:string|null;created_at:string}
 export interface SubstitutionRequest{id:number;request_id:string;po_number:string;material_code:string;current_lot:string|null;proposed_lot:string;reason:string;status:string;decision_note:string|null;created_at:string}
 export interface TrainingSession{id:number;session_id:string;role:string;difficulty:string;status:string;score:number;created_at:string}
-export interface ProductionOrderPayload{po_number:string;batch_number:string;product_name:string;quantity:number;priority:string;destination:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean;flavor:string;bulk_material:string}
+export interface ProductionOrderPayload{po_number:string;batch_number:string;material_number:string;product_name:string;quantity:number;priority:string;destination:string;weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string;requires_premix:boolean;flavor:string;dye:string;bulk_material:string}
 export interface PlatformEvent{id:number;event_type:string;source:string;entity_type:string;entity_id:string;message:string;severity:string;created_at:string}
 export interface NotificationRecord{id:number;recipient:string;title:string;message:string;severity:string;is_read:boolean;created_at:string}
 export interface SchedulerConflictPayload{weigh_room:string;mix_tank:string;hold_tank:string;packaging_line:string}
@@ -16,21 +16,24 @@ export interface SchedulerConflictResponse{available:boolean;conflicts:Scheduler
 
 export interface WeighRoom{id:number;room_code:string;name:string;status:string;scale_id:string;scale_status:string;calibration_due:string;active_po:string|null}
 export interface WeighTicket{id:number;ticket_number:string;po_number:string;batch_number:string;room_code:string;operator:string;status:string;tare_confirmed:boolean;signature:string|null;current_material_index:number;created_at:string}
-export interface WeighTicketLine{id:number;ticket_number:string;material_code:string;material_name:string;lot_number:string;target_quantity:number;actual_quantity:number|null;unit:string;tolerance:number;barcode_verified:boolean;status:string}
+export interface WeighTicketLine{id:number;ticket_number:string;material_code:string;material_name:string;lot_number:string;target_quantity:number;actual_quantity:number|null;unit:string;tolerance:number;barcode_verified:boolean;status:string;scale_type:string;container_id:string|null;tare_weight:number;gross_weight:number|null}
 export interface WeighTicketWorkspace{ticket:WeighTicket;lines:WeighTicketLine[];current_line:WeighTicketLine|null;completion_percent:number}
 
 export interface MixRoom{id:number;room_code:string;name:string;tank_code:string;capacity_l:number;status:string;cip_status:string;active_po:string|null;plc_code:string}
 export interface HoldTank{id:number;tank_code:string;capacity_l:number;status:string;cip_status:string;active_po:string|null;level_percent:number;qa_status:string;batch_number:string|null;product_name:string|null;transferred_quantity:number;source_mix_tank:string|null;transfer_completed_at:string|null;lims_sample_id:string|null}
-export interface MixBatch{id:number;batch_id:string;po_number:string;batch_number:string;room_code:string;tank_code:string;operator:string;status:string;phase:string;progress:number;level_percent:number;mass_kg:number;temperature_c:number;rpm:number;requires_premix:boolean;premix_status:string;manual_adds_confirmed:boolean;selected_hold_tank:string|null;sample_collected:boolean;fault_code:string|null;fault_message:string|null;fault_diagnosed:boolean;created_at:string}
-export interface PremixRun{id:number;run_id:string;mix_batch_id:string;status:string;progress:number;level_percent:number;rpm:number;operator_confirmed:boolean}
-export interface MixWorkspace{batch:MixBatch;premix:PremixRun|null;hold_tanks:HoldTank[];available_actions:string[]}
+export interface MixBatch{id:number;batch_id:string;po_number:string;batch_number:string;room_code:string;tank_code:string;operator:string;status:string;phase:string;progress:number;level_percent:number;mass_kg:number;temperature_c:number;rpm:number;agitator_command_rpm:number;motor_load_percent:number;vacuum_bar:number;vessel_closed:boolean;readiness_verified:boolean;requires_premix:boolean;premix_status:string;manual_adds_confirmed:boolean;selected_hold_tank:string|null;sample_collected:boolean;fault_code:string|null;fault_message:string|null;fault_diagnosed:boolean;created_at:string}
+export interface PremixRun{id:number;run_id:string;mix_batch_id:string;status:string;progress:number;level_percent:number;rpm:number;operator_confirmed:boolean;premix_water_kg:number;rinse_water_kg:number}
+export interface BatchMaterialGenealogy{batch_number:string;material_code:string;material_name:string;material_lot:string|null;required_quantity:number;actual_quantity:number|null;unit_of_measure:string;weighing_status:string}
+export interface BulkReadiness{material:string;tank_code:string;source_type?:string;required_quantity:number;available_quantity:number|null;qa_status:string;equipment_status:string;ready:boolean;reason:string}
+export interface MixWorkspace{batch:MixBatch;premix:PremixRun|null;hold_tanks:HoldTank[];available_actions:string[];materials:BatchMaterialGenealogy[];bulk_readiness:BulkReadiness[];readiness_passed:boolean}
 export interface RouteChangeRequest{id:number;request_id:string;po_number:string;resource_type:string;current_resource:string;requested_resource:string;reason:string;requester:string;status:string;created_at:string}
 
 export interface QABulkTask{id:number;task_id:string;po_number:string;batch_number:string;product_name:string;hold_tank:string;sample_id:string;status:string;disposition:string|null;disposition_note:string|null;created_at:string;decided_at:string|null}
 
 export interface PackagingLine{id:number;line_code:string;name:string;status:string;cip_status:string;active_po:string|null;plc_code:string;rated_speed_bpm:number}
 export interface PackagingRun{id:number;run_id:string;po_number:string;batch_number:string;line_code:string;hold_tank:string;operator:string;status:string;progress:number;bottles_completed:number;cases_staged:number;rejects:number;speed_bpm:number;jam_code:string|null;fault_message:string|null;fault_diagnosed:boolean;fg_sample_id:string|null;fault_sequence_index:number;fault_count:number;downtime_minutes:number;created_at:string}
-export interface PackagingWorkspace{run:PackagingRun;line:PackagingLine;available_actions:string[]}
+export interface PackagingComponent{material_code:string;material_name:string;available_quantity:number;unit_of_measure:string}
+export interface PackagingWorkspace{run:PackagingRun;line:PackagingLine;available_actions:string[];components:PackagingComponent[]}
 export interface QAFinishedGoodsTask{id:number;task_id:string;po_number:string;batch_number:string;product_name:string;packaging_line:string;sample_id:string;quantity:number;status:string;disposition:string|null;disposition_note:string|null;created_at:string;decided_at:string|null}
 
 export interface CIPRun{id:number;cip_id:string;asset_type:string;asset_code:string;operator:string;status:string;phase:string;progress:number;fault_code:string|null;fault_message:string|null;fault_diagnosed:boolean;signature:string|null;created_at:string;completed_at:string|null}
@@ -88,3 +91,27 @@ export interface SecurityStatus extends ParkingStatus {
   recent_events: SecurityEvent[];
 }
 
+
+export interface FormulationOption{material_code:string;material_name:string;lots:string[]}
+export interface FormulationOptions{flavors:FormulationOption[];dyes:FormulationOption[]}
+export interface RnDSampleBatch{id:number;sample_batch_id:string;test_po_number:string|null;formula_code:string|null;formula_name:string|null;product_name:string;flavor:string;dye:string;scale_l:number;status:string;disposition:string;revision_no:number;test_result:string|null;lab_stage:string;agitation_rpm:number;agitation_minutes:number;materials_json:string;bulk_json:string;process_json:string;promoted_material_number:string|null;created_at:string}
+export interface RnDMaterialCatalogItem{material_code:string;material_name:string;material_type:string;unit_of_measure:string;qualification_status:string;target_material_code?:string}
+export interface RnDBulkOption{tank_code:string;material_code:string;material_name:string;capacity_kg:number;quantity_kg:number;qa_status:string;status:string}
+export interface RnDMaterialCatalog{materials:RnDMaterialCatalogItem[];candidates:RnDMaterialCatalogItem[];bulks:RnDBulkOption[]}
+
+export interface FormulationVariant{material_number:string;name:string;flavor:string;dyes:string[]}
+export interface MESExecutionEvent{event_id:number;po_number:string;event_type:string;phase:string;equipment_id:string|null;operator_id:string|null;material_code:string|null;material_name:string|null;lot_number:string|null;quantity:number|null;unit:string|null;metric:string|null;value:number|null;message:string;severity:string;qualified:boolean;event_timestamp:string}
+export interface MESBatchRecord{po_number:string;events:MESExecutionEvent[];summary:Record<string,unknown>}
+
+export interface ProductionCampaign{id:number;campaign_id:string;material_number:string;po_numbers:string;status:string;locked:boolean;accepted_by:string|null;accepted_at:string|null;created_at:string}
+export interface CampaignSeparationRequest{id:number;request_id:string;campaign_id:string;po_number:string;requested_by:string;reason:string;status:string;decision_note:string|null;created_at:string}
+export interface CampaignInventoryRequirement{material_code:string;material_name:string;unit:string;campaign_required:number;staged_available:number;remaining_to_request:number;hazard_class:string}
+export interface CampaignPlantInventory{campaign:{campaign_id:string;material_number:string;po_numbers:string[];status:string;locked:boolean;accepted_by:string|null};requirements:Array<CampaignInventoryRequirement & {warehouse_available:number}>;staging:Array<{container_id:string;material_code:string;material_name:string;lot_number:string;quantity:number;unit:string;location_code:string;hazard_class:string;status:string}>;required_warehouse:InventoryLot[];approved_substitutes:Record<string,Array<{material_code:string;material_name:string;internal_lot_number:string;available_quantity:number;unit_of_measure:string;expiry_date:string|null}>>;warehouse:InventoryLot[];rnd_candidates:Array<{candidate_code:string;candidate_name:string;target_material_code:string;approval_status:string}>}
+export interface ProductionRunResponse{campaign:ProductionCampaign;production_orders:ProductionOrder[]}
+
+export interface MaterialPR{id:number;pr_number:string;po_number:string;campaign_id:string|null;requested_by:string;weigh_room:string;status:string;destination:string;created_at:string}
+export interface MaterialPRLine{id:number;pr_number:string;po_number:string|null;material_code:string;material_name:string;lot_number:string;requested_quantity:number;picked_quantity:number;unit:string;source_location:string;hazard_class:string;pick_sequence:number;status:string}
+export interface MaterialPRLineDraft{po_number?:string|null;material_code:string;material_name:string;lot_number:string;requested_quantity:number;unit:string;source_location:string;hazard_class:string}
+export interface MaterialPRWorkspace{pr:MaterialPR;lines:MaterialPRLine[]}
+export interface MaterialPosition{id:number;container_id:string;material_code:string;material_name:string;lot_number:string;quantity:number;unit:string;location_code:string;status:string;hazard_class:string;campaign_id:string|null;po_number:string|null;pr_number:string|null;updated_at:string}
+export interface MaterialMovement{id:number;movement_id:string;container_id:string;material_code:string;lot_number:string;quantity:number;unit:string;from_location:string;to_location:string;movement_type:string;operator:string;po_number:string|null;pr_number:string|null;created_at:string}

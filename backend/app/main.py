@@ -13,6 +13,10 @@ from app.core.database import Base, engine
 
 settings = get_settings()
 
+from sqlalchemy.engine import make_url
+
+db_url = make_url(settings.database_url)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -37,6 +41,15 @@ async def lifespan(_: FastAPI):
                 )
             )
 
+        if "material_number" not in production_order_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE production_orders "
+                    "ADD COLUMN material_number VARCHAR(50) "
+                    "NOT NULL DEFAULT 'PC-1308'"
+                )
+            )
+
         mix_batch_columns = {
             column["name"]
             for column in inspector.get_columns("mix_batches")
@@ -50,6 +63,17 @@ async def lifespan(_: FastAPI):
                     "NOT NULL DEFAULT 'Propylene Glycol'"
                 )
             )
+
+        mix_defaults = {
+            "agitator_command_rpm": "INTEGER NOT NULL DEFAULT 0",
+            "motor_load_percent": "FLOAT NOT NULL DEFAULT 0",
+            "vacuum_bar": "FLOAT NOT NULL DEFAULT 0",
+            "vessel_closed": "BOOLEAN NOT NULL DEFAULT false",
+            "readiness_verified": "BOOLEAN NOT NULL DEFAULT false",
+        }
+        for column_name, ddl in mix_defaults.items():
+            if column_name not in mix_batch_columns:
+                connection.execute(text(f"ALTER TABLE mix_batches ADD COLUMN {column_name} {ddl}"))
 
     yield
 

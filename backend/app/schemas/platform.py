@@ -11,12 +11,13 @@ class MaterialRequirementCreate(BaseModel):
     unit: str
 
 class ProductionOrderCreate(BaseModel):
-    po_number: str = Field(min_length=3, max_length=50)
-    batch_number: str = Field(min_length=3, max_length=50)
+    po_number: str = ""
+    batch_number: str = ""
+    material_number: str = "PC-1308"
     product_name: str = Field(min_length=3, max_length=200)
     quantity: int = Field(gt=0)
     priority: str = "Normal"
-    destination: str = "Weighing Staging"
+    destination: str = "Chem Weigh Staging"
     materials: list[MaterialRequirementCreate] = []
     weigh_room: str = "WR-01"
     mix_tank: str = "V-201"
@@ -24,11 +25,12 @@ class ProductionOrderCreate(BaseModel):
     packaging_line: str = "PKG-01"
     requires_premix: bool = False
     flavor: str = "Cherry"
+    dye: str = "FD&C Red No. 40"
     bulk_material: str = "Propylene Glycol"
 
 class ProductionOrderRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: int; po_number: str; batch_number: str; product_name: str; quantity: int; status: str
+    id: int; po_number: str; batch_number: str; material_number: str; product_name: str; quantity: int; status: str
     weigh_room: str; mix_tank: str; hold_tank: str; packaging_line: str; requires_premix: bool; bulk_material: str; created_at: datetime
 
 class MaterialRequirementRead(BaseModel):
@@ -44,6 +46,10 @@ class InventoryLotRead(BaseModel):
 class MaterialComparison(BaseModel):
     material_code: str; material_name: str; required_quantity: float; unit: str
     available_quantity: float; released_quantity: float; status: str; recommended_lot: str | None; warning: str | None
+    recommended_substitute_material_code: str | None = None
+    recommended_substitute_material_name: str | None = None
+    recommended_substitute_lot: str | None = None
+    recommended_substitute_available: float | None = None
 
 class ProductionOrderWorkspace(BaseModel):
     production_order: ProductionOrderRead
@@ -69,6 +75,49 @@ class SubstitutionRequestRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int; request_id: str; po_number: str; material_code: str; current_lot: str | None
     proposed_lot: str; reason: str; status: str; decision_note: str | None; created_at: datetime
+
+
+class MaterialPRLineCreate(BaseModel):
+    po_number: str | None = None
+    material_code: str
+    material_name: str
+    lot_number: str
+    requested_quantity: float = Field(gt=0)
+    unit: str
+    source_location: str
+    hazard_class: str = "General"
+
+class MaterialPRCreate(BaseModel):
+    po_number: str
+    campaign_id: str | None = None
+    operator: str = "Weigh Technician"
+    lines: list[MaterialPRLineCreate] = []
+
+class MaterialPRRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int; pr_number: str; po_number: str; campaign_id: str | None = None; requested_by: str; weigh_room: str; status: str; destination: str; created_at: datetime
+
+class MaterialPRLineRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int; pr_number: str; po_number: str | None = None; material_code: str; material_name: str; lot_number: str; requested_quantity: float; picked_quantity: float; unit: str; source_location: str; hazard_class: str; pick_sequence: int; status: str
+
+class MaterialPRWorkspace(BaseModel):
+    pr: MaterialPRRead
+    lines: list[MaterialPRLineRead]
+
+class MaterialPositionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int; container_id: str; material_code: str; material_name: str; lot_number: str; quantity: float; unit: str; location_code: str; status: str; hazard_class: str; campaign_id: str | None = None; po_number: str | None; pr_number: str | None; updated_at: datetime
+
+class MaterialMovementRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int; movement_id: str; container_id: str; material_code: str; lot_number: str; quantity: float; unit: str; from_location: str; to_location: str; movement_type: str; operator: str; po_number: str | None; pr_number: str | None; created_at: datetime
+
+class MaterialMoveRequest(BaseModel):
+    container_id: str
+    operator: str = "Weigh Technician"
+    room_code: str | None = None
+    po_number: str | None = None
 
 class TrainingSessionCreate(BaseModel): role: str; difficulty: str = "Beginner"
 class TrainingStepComplete(BaseModel):
@@ -103,6 +152,10 @@ class WeighTicketLineRead(BaseModel):
     id: int; ticket_number: str; material_code: str; material_name: str; lot_number: str
     target_quantity: float; actual_quantity: float | None; unit: str; tolerance: float
     barcode_verified: bool; status: str
+    scale_type: str = "Bench Scale"
+    container_id: str | None = None
+    tare_weight: float = 0
+    gross_weight: float | None = None
 
 class WeighTicketRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -120,6 +173,45 @@ class TareConfirmation(BaseModel): operator: str
 class WeighMaterialRequest(BaseModel): actual_quantity: float = Field(gt=0); operator: str
 class ElectronicSignature(BaseModel): signature: str = Field(min_length=3)
 
+
+
+class CampaignCreate(BaseModel):
+    po_numbers: list[str] = Field(min_length=1, max_length=4)
+
+class CampaignRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int; campaign_id: str; material_number: str; po_numbers: str; status: str; locked: bool = True; accepted_by: str | None = None; accepted_at: datetime | None = None; created_at: datetime
+
+class CampaignAcceptRequest(BaseModel):
+    operator: str = "Weigh Technician"
+
+class CampaignSeparationCreate(BaseModel):
+    po_number: str
+    requester: str = "Weigh Technician"
+    reason: str
+
+class CampaignSeparationDecision(BaseModel):
+    approved: bool
+    decision_note: str = ""
+
+class CampaignSeparationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int; request_id: str; campaign_id: str; po_number: str; requested_by: str; reason: str; status: str; decision_note: str | None = None; created_at: datetime
+
+class ProductionRunCreate(ProductionOrderCreate):
+    campaign_size: int = Field(default=1, ge=1, le=4)
+
+class ProductionRunRead(BaseModel):
+    campaign: CampaignRead
+    production_orders: list[ProductionOrderRead]
+
+class ShortageRequest(BaseModel):
+    po_number: str
+    material_code: str
+    material_name: str
+    required_remaining: float
+    available_quantity: float
+    requester: str = "Weighing"
 
 class MixRoomRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -169,11 +261,17 @@ class MixBatchRead(BaseModel):
     operator: str
     status: str
     phase: str
+    cleaning_type: str = "Full CIP"
     progress: int
     level_percent: float
     mass_kg: float
     temperature_c: float
     rpm: int
+    agitator_command_rpm: int
+    motor_load_percent: float
+    vacuum_bar: float
+    vessel_closed: bool
+    readiness_verified: bool
     requires_premix: bool
     premix_status: str
     manual_adds_confirmed: bool
@@ -195,6 +293,8 @@ class PremixRunRead(BaseModel):
     level_percent: float
     rpm: int
     operator_confirmed: bool
+    premix_water_kg: float = 0
+    rinse_water_kg: float = 0
 
 
 class MixWorkspace(BaseModel):
@@ -202,6 +302,9 @@ class MixWorkspace(BaseModel):
     premix: PremixRunRead | None
     hold_tanks: list[HoldTankRead]
     available_actions: list[str]
+    materials: list[dict] = []
+    bulk_readiness: list[dict] = []
+    readiness_passed: bool = False
 
 
 class QABulkTaskRead(BaseModel):
@@ -258,6 +361,67 @@ class RouteChangeRequestRead(BaseModel):
     requester: str
     status: str
     created_at: datetime
+
+
+
+class RnDMaterialSelection(BaseModel):
+    material_code: str
+    material_name: str
+    quantity: float = Field(gt=0)
+    unit: str = "kg"
+    role: str = "manual"
+    source: str = "approved"
+
+class RnDBulkSelection(BaseModel):
+    tank_code: str
+    material_code: str
+    material_name: str
+    quantity_kg: float = Field(gt=0)
+
+class RnDProcessDefinition(BaseModel):
+    agitation_rpm: int = Field(default=120, ge=0, le=2000)
+    agitation_minutes: int = Field(default=10, ge=1, le=240)
+    premix_rpm: int = Field(default=850, ge=0, le=2000)
+    premix_minutes: int = Field(default=5, ge=0, le=120)
+    vacuum_required: bool = False
+    target_temperature_c: float = Field(default=22, ge=0, le=100)
+    addition_sequence: list[str] = []
+
+class RnDSampleBatchCreate(BaseModel):
+    formula_name: str = "Development Formula"
+    flavor: str = "Cherry"
+    dye: str = "None"
+    scale_l: float = Field(default=10, gt=0, le=500)
+    materials: list[RnDMaterialSelection] = []
+    bulks: list[RnDBulkSelection] = []
+    process: RnDProcessDefinition = RnDProcessDefinition()
+
+class RnDSampleBatchRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    sample_batch_id: str
+    test_po_number: str | None = None
+    formula_code: str | None = None
+    formula_name: str | None = None
+    product_name: str
+    flavor: str
+    dye: str
+    scale_l: float
+    status: str
+    disposition: str = "Draft"
+    revision_no: int = 1
+    test_result: str | None
+    lab_stage: str = "R&D Material Request"
+    agitation_rpm: int = 120
+    agitation_minutes: int = 10
+    materials_json: str = "[]"
+    bulk_json: str = "[]"
+    process_json: str = "{}"
+    promoted_material_number: str | None = None
+    created_at: datetime
+
+class RnDSampleDecision(BaseModel):
+    result: str = ""
 
 
 class PackagingLineRead(BaseModel):
@@ -370,6 +534,7 @@ class CIPRunCreate(BaseModel):
     asset_type: str
     asset_code: str
     operator: str = "Maintenance Technician"
+    cleaning_type: str = "Full CIP"
 
 class CIPRunRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -380,6 +545,7 @@ class CIPRunRead(BaseModel):
     operator: str
     status: str
     phase: str
+    cleaning_type: str = "Full CIP"
     progress: int
     fault_code: str | None
     fault_message: str | None

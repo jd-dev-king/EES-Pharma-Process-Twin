@@ -15,9 +15,10 @@ class ProductionOrder(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     po_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     batch_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    material_number: Mapped[str] = mapped_column(String(50), default="PC-1308", index=True)
     product_name: Mapped[str] = mapped_column(String(200))
     quantity: Mapped[int] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(40), default="Registered")
+    status: Mapped[str] = mapped_column(String(100), default="Registered")
     weigh_room: Mapped[str] = mapped_column(String(30), default="WR-01")
     mix_tank: Mapped[str] = mapped_column(String(30), default="V-201")
     hold_tank: Mapped[str] = mapped_column(String(30), default="H-301")
@@ -59,7 +60,7 @@ class WarehouseTransferOrder(Base):
     to_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     po_number: Mapped[str] = mapped_column(String(50), index=True)
     priority: Mapped[str] = mapped_column(String(20), default="Normal")
-    destination: Mapped[str] = mapped_column(String(100), default="Weighing Staging")
+    destination: Mapped[str] = mapped_column(String(100), default="Chem Weigh Staging")
     status: Mapped[str] = mapped_column(String(40), default="Pending")
     owner: Mapped[str] = mapped_column(String(80), default="Warehouse Queue")
     progress: Mapped[int] = mapped_column(Integer, default=0)
@@ -78,6 +79,72 @@ class SubstitutionRequest(Base):
     reason: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), default="Pending")
     decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class MaterialPR(Base):
+    __tablename__ = "material_prs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pr_number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    po_number: Mapped[str] = mapped_column(String(50), index=True)
+    campaign_id: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    requested_by: Mapped[str] = mapped_column(String(100), default="Weigh Technician")
+    weigh_room: Mapped[str] = mapped_column(String(30), default="WR-01")
+    status: Mapped[str] = mapped_column(String(100), default="Submitted")
+    destination: Mapped[str] = mapped_column(String(80), default="WH-VEST-01")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class MaterialPRLine(Base):
+    __tablename__ = "material_pr_lines"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    pr_number: Mapped[str] = mapped_column(String(50), index=True)
+    po_number: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    material_code: Mapped[str] = mapped_column(String(50), index=True)
+    material_name: Mapped[str] = mapped_column(String(160))
+    lot_number: Mapped[str] = mapped_column(String(60), index=True)
+    requested_quantity: Mapped[float] = mapped_column(Float)
+    picked_quantity: Mapped[float] = mapped_column(Float, default=0)
+    unit: Mapped[str] = mapped_column(String(20))
+    source_location: Mapped[str] = mapped_column(String(80))
+    hazard_class: Mapped[str] = mapped_column(String(40), default="General")
+    pick_sequence: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(100), default="Requested")
+
+
+class MaterialPosition(Base):
+    __tablename__ = "material_positions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    container_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    material_code: Mapped[str] = mapped_column(String(50), index=True)
+    material_name: Mapped[str] = mapped_column(String(160))
+    lot_number: Mapped[str] = mapped_column(String(60), index=True)
+    quantity: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20))
+    location_code: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(100), default="Available")
+    hazard_class: Mapped[str] = mapped_column(String(40), default="General")
+    campaign_id: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    po_number: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    pr_number: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class MaterialMovement(Base):
+    __tablename__ = "material_movements"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    movement_id: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    container_id: Mapped[str] = mapped_column(String(80), index=True)
+    material_code: Mapped[str] = mapped_column(String(50), index=True)
+    lot_number: Mapped[str] = mapped_column(String(60), index=True)
+    quantity: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20))
+    from_location: Mapped[str] = mapped_column(String(80))
+    to_location: Mapped[str] = mapped_column(String(80))
+    movement_type: Mapped[str] = mapped_column(String(60), index=True)
+    operator: Mapped[str] = mapped_column(String(100))
+    po_number: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    pr_number: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
@@ -155,6 +222,36 @@ class WeighTicketLine(Base):
     tolerance: Mapped[float] = mapped_column(Float, default=0.02)
     barcode_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(40), default="Pending")
+    scale_type: Mapped[str] = mapped_column(String(40), default="Bench Scale")
+    container_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    tare_weight: Mapped[float] = mapped_column(Float, default=0)
+    gross_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class ProductionCampaign(Base):
+    __tablename__ = "production_campaigns"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    material_number: Mapped[str] = mapped_column(String(50), index=True)
+    po_numbers: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(100), default="Pending Weigh Acceptance")
+    locked: Mapped[bool] = mapped_column(Boolean, default=True)
+    accepted_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class CampaignSeparationRequest(Base):
+    __tablename__ = "campaign_separation_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_id: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    campaign_id: Mapped[str] = mapped_column(String(60), index=True)
+    po_number: Mapped[str] = mapped_column(String(50), index=True)
+    requested_by: Mapped[str] = mapped_column(String(100))
+    reason: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(100), default="Pending")
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 class MixRoom(Base):
@@ -204,6 +301,11 @@ class MixBatch(Base):
     mass_kg: Mapped[float] = mapped_column(Float, default=0)
     temperature_c: Mapped[float] = mapped_column(Float, default=22)
     rpm: Mapped[int] = mapped_column(Integer, default=0)
+    agitator_command_rpm: Mapped[int] = mapped_column(Integer, default=0)
+    motor_load_percent: Mapped[float] = mapped_column(Float, default=0)
+    vacuum_bar: Mapped[float] = mapped_column(Float, default=0)
+    vessel_closed: Mapped[bool] = mapped_column(Boolean, default=False)
+    readiness_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     requires_premix: Mapped[bool] = mapped_column(Boolean, default=False)
     bulk_material: Mapped[str] = mapped_column(String(80), default="Propylene Glycol")
     premix_status: Mapped[str] = mapped_column(String(40), default="Not Required")
@@ -226,6 +328,8 @@ class PremixRun(Base):
     level_percent: Mapped[float] = mapped_column(Float, default=0)
     rpm: Mapped[int] = mapped_column(Integer, default=0)
     operator_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    premix_water_kg: Mapped[float] = mapped_column(Float, default=0)
+    rinse_water_kg: Mapped[float] = mapped_column(Float, default=0)
 
 
 class QABulkTask(Base):
@@ -353,6 +457,7 @@ class CIPRun(Base):
     operator: Mapped[str] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(40), default="Ready")
     phase: Mapped[str] = mapped_column(String(40), default="Drain")
+    cleaning_type: Mapped[str] = mapped_column(String(40), default="Full CIP")
     progress: Mapped[int] = mapped_column(Integer, default=0)
     fault_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     fault_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -409,6 +514,32 @@ class AuditTrailEntry(Base):
     reason: Mapped[str] = mapped_column(Text)
     actor: Mapped[str] = mapped_column(String(120))
     signature: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+
+class RnDSampleBatch(Base):
+    __tablename__ = "rnd_sample_batches"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sample_batch_id: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    test_po_number: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    formula_code: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    formula_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    product_name: Mapped[str] = mapped_column(String(200), default="Liquid Prednisone 15 mg/5 mL")
+    flavor: Mapped[str] = mapped_column(String(80), default="Cherry")
+    dye: Mapped[str] = mapped_column(String(200), default="None")
+    scale_l: Mapped[float] = mapped_column(Float, default=10)
+    status: Mapped[str] = mapped_column(String(50), default="Draft")
+    disposition: Mapped[str] = mapped_column(String(50), default="Draft")
+    revision_no: Mapped[int] = mapped_column(Integer, default=1)
+    test_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lab_stage: Mapped[str] = mapped_column(String(50), default="R&D Material Request")
+    agitation_rpm: Mapped[int] = mapped_column(Integer, default=120)
+    agitation_minutes: Mapped[int] = mapped_column(Integer, default=10)
+    materials_json: Mapped[str] = mapped_column(Text, default="[]")
+    bulk_json: Mapped[str] = mapped_column(Text, default="[]")
+    process_json: Mapped[str] = mapped_column(Text, default="{}")
+    promoted_material_number: Mapped[str | None] = mapped_column(String(60), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
