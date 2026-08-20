@@ -580,6 +580,18 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
   font-size: .54rem;
 }
 
+/* The overall browser can still be wide while the center 3D column is narrow
+   because Plant Navigation + SCADA + Live Context consume horizontal space.
+   This breakpoint protects the overview at normal desktop zoom. */
+@media (max-width: 1750px) and (min-width: 1201px) {
+  .camera-overview .twin-scene,
+  .twin-scene {
+    left: 50% !important;
+    top: 31% !important;
+    transform: translate(-50%, -47%) rotateX(58deg) rotateZ(-35deg) scale(.58) !important;
+  }
+}
+
 @media (max-width: 1200px) {
   .twin-parking-campus {
     right: -15%;
@@ -587,6 +599,22 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
     width: 25%;
     height: 14%;
   }
+}
+
+/* The 3D viewport can be narrower than the browser because the navigation, HUD,
+   and live-context columns consume width. Never let the dock children establish
+   a minimum width larger than their actual container. */
+.parking-campus-panel > *,
+.parking-campus-panel-info,
+.parking-campus-lot,
+.parking-campus-lot .parking-campus-grid {
+  min-width: 0 !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.parking-campus-lot .parking-campus-grid {
+  overflow: hidden;
 }
 
 @media (max-width: 900px) {
@@ -1494,4 +1522,367 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
 .campaign-sync-button {
   margin-top: 7px;
   width: 100%;
+}
+
+/* ============================================================
+   Campus Parking Dock — unified card + 70-space lot
+   Keeps parking out of the transformed plant scene and visually
+   connects the status/launch controls to the parking visualization.
+   ============================================================ */
+.twin-viewport {
+  min-height: 850px !important;
+  overflow: hidden !important;
+}
+
+/* Reserve the upper portion of the viewport for the plant only.
+   The overview scene is deliberately scaled to fit inside the actual
+   center viewport at 100% browser zoom, rather than relying on page zoom. */
+.camera-overview .twin-scene,
+.twin-scene {
+  left: 50% !important;
+  top: 31% !important;
+  transform: translate(-50%, -47%) rotateX(58deg) rotateZ(-35deg) scale(.60) !important;
+  transform-origin: 50% 50% !important;
+}
+
+.camera-production .twin-scene {
+  top: 34% !important;
+  transform: translate(-52%, -50%) rotateX(61deg) rotateZ(-34deg) scale(.88) !important;
+}
+.camera-warehouse .twin-scene {
+  top: 34% !important;
+  transform: translate(-36%, -38%) rotateX(61deg) rotateZ(-35deg) scale(.92) !important;
+}
+.camera-labs .twin-scene {
+  top: 34% !important;
+  transform: translate(-58%, -63%) rotateX(61deg) rotateZ(-35deg) scale(.92) !important;
+}
+.camera-shipping .twin-scene {
+  top: 34% !important;
+  transform: translate(-67%, -70%) rotateX(61deg) rotateZ(-35deg) scale(.96) !important;
+}
+
+/* Old in-scene parking elements are no longer part of this layout. */
+.parking-campus-sign,
+.twin-parking-campus {
+  display: none !important;
+}
+
+.parking-campus-panel {
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  bottom: 2.6%;
+  z-index: 80;
+  min-height: 250px;
+  width: auto;
+  max-width: none;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+  gap: 1rem;
+  padding: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(106, 241, 172, .70);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(3, 23, 31, .985), rgba(3, 15, 24, .985));
+  box-shadow: 0 18px 44px rgba(0,0,0,.42), 0 0 34px rgba(66,225,159,.12);
+}
+
+.parking-campus-panel::before {
+  content: "";
+  position: absolute;
+  left: 58%;
+  top: -42px;
+  width: 2px;
+  height: 42px;
+  background: linear-gradient(180deg, rgba(77,234,165,.08), rgba(77,234,165,.88));
+  box-shadow: 0 0 10px rgba(77,234,165,.5);
+}
+
+.parking-campus-panel::after {
+  content: "";
+  position: absolute;
+  left: calc(58% - 4px);
+  top: -47px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #65e9a9;
+  box-shadow: 0 0 12px rgba(101,233,169,.85);
+}
+
+.parking-campus-panel-info {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: .2rem .15rem .1rem .15rem;
+}
+
+.parking-campus-panel-kicker {
+  color: #68dff5;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+}
+
+.parking-campus-panel-info h3 {
+  margin: .24rem 0 .2rem;
+  color: #74f0ad;
+  font-size: 1rem;
+  line-height: 1.15;
+  letter-spacing: .04em;
+}
+
+.parking-campus-panel-status {
+  color: #f4fbfd;
+  font-size: .9rem;
+  font-weight: 800;
+}
+
+.parking-campus-panel-info > small {
+  margin-top: .12rem;
+  color: #b8ccd4;
+  font-size: .7rem;
+  line-height: 1.35;
+}
+
+.parking-campus-panel.online .parking-campus-panel-info::after,
+.parking-campus-panel.offline .parking-campus-panel-info::after {
+  content: "";
+  position: absolute;
+  top: .2rem;
+  right: .25rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.parking-campus-panel.online .parking-campus-panel-info::after {
+  background: #64edaa;
+  box-shadow: 0 0 12px rgba(100,237,170,.9);
+}
+.parking-campus-panel.offline .parking-campus-panel-info::after {
+  background: #ffbe55;
+  box-shadow: 0 0 10px rgba(255,190,85,.7);
+}
+
+.parking-campus-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: .4rem;
+  margin-top: .75rem;
+}
+
+.parking-campus-metrics article {
+  min-width: 0;
+  padding: .62rem .35rem;
+  border: 1px solid rgba(69,190,222,.22);
+  border-radius: 10px;
+  background: rgba(6,31,45,.72);
+  text-align: center;
+}
+
+.parking-campus-metrics b,
+.parking-campus-metrics span {
+  display: block;
+}
+.parking-campus-metrics b {
+  color: #e8f9fb;
+  font-size: .88rem;
+}
+.parking-campus-metrics span {
+  margin-top: .14rem;
+  color: var(--muted);
+  font-size: .55rem;
+}
+
+.parking-campus-open {
+  width: 100%;
+  margin-top: auto !important;
+  min-height: 39px;
+}
+
+.parking-campus-lot {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 215px;
+  box-sizing: border-box;
+  padding: 20px 18px 27px;
+  border: 1px solid rgba(106,241,172,.48);
+  border-radius: 15px;
+  background:
+    linear-gradient(180deg, rgba(13,34,39,.98), rgba(6,24,29,.98));
+  box-shadow: inset 0 0 30px rgba(44,151,151,.07);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.parking-campus-lot:hover,
+.parking-campus-lot:focus-visible {
+  border-color: #7ff7bb;
+  outline: none;
+  box-shadow: inset 0 0 30px rgba(44,151,151,.1), 0 0 20px rgba(66,225,159,.16);
+}
+
+/* 14 × 5 = 70 actual visual spaces. */
+.parking-campus-lot .parking-campus-grid {
+  position: relative !important;
+  inset: auto !important;
+  width: 100%;
+  height: 100%;
+  display: grid !important;
+  grid-template-columns: repeat(14, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(5, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+}
+
+.parking-campus-lot .parking-campus-grid i {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(158,190,197,.36) !important;
+  border-radius: 2px;
+  background: rgba(12,28,34,.78) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.015);
+}
+
+.parking-campus-lot .parking-campus-grid i.occupied {
+  border-color: rgba(102,224,244,.85) !important;
+  background: linear-gradient(135deg,#2c9fc1,#70ddf0) !important;
+  box-shadow: 0 0 8px rgba(76,215,241,.5) !important;
+}
+
+.parking-campus-gate {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 82px;
+  height: 22px;
+  transform: translateX(-50%);
+  border-left: 1px solid rgba(255,255,255,.18);
+  border-right: 1px solid rgba(255,255,255,.18);
+  background: repeating-linear-gradient(90deg, rgba(202,217,220,.62) 0 5px, transparent 5px 10px);
+}
+.parking-campus-gate i {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 0;
+  height: 3px;
+  background: repeating-linear-gradient(90deg,#ffc35b 0 10px,#273741 10px 20px);
+  box-shadow: 0 0 5px rgba(255,195,91,.3);
+}
+
+@media (max-width: 1200px) {
+  .twin-viewport { min-height: 820px !important; }
+  .parking-campus-panel {
+    grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr);
+    left: 2.5%;
+    right: 2.5%;
+  }
+  .twin-scene {
+    left: 50% !important;
+    top: 30% !important;
+    transform: translate(-50%, -47%) rotateX(58deg) rotateZ(-35deg) scale(.54) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .twin-viewport { min-height: 1010px !important; }
+  .parking-campus-panel {
+    grid-template-columns: 1fr;
+    bottom: 2%;
+    min-height: 420px;
+  }
+  .parking-campus-panel::before,
+  .parking-campus-panel::after { display:none; }
+  .parking-campus-lot { min-height: 205px; }
+  .twin-scene {
+    top: 25% !important;
+    transform: translate(-50%, -48%) rotateX(58deg) rotateZ(-35deg) scale(.50) !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .twin-viewport { min-height: 1080px !important; }
+  .parking-campus-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .parking-campus-lot .parking-campus-grid { gap: 2px !important; }
+}
+
+/* ============================================================
+   3D Twin overview — horizontal campus orientation
+   Keeps the overview plant parallel with the docked parking lot.
+   Department camera presets retain their original angled/isometric views.
+   ============================================================ */
+.camera-overview .twin-scene {
+  left: 50% !important;
+  top: 31% !important;
+  transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.66) !important;
+  transform-origin: 50% 50% !important;
+}
+
+/* Room labels no longer need the isometric counter-rotation in overview. */
+.camera-overview .twin-room-label {
+  transform: translateZ(42px) rotateX(0deg) rotateZ(0deg) !important;
+  transform-origin: left top !important;
+}
+
+/* Keep the overview centered and fully contained on narrower desktop viewports. */
+@media (max-width: 1450px) {
+  .camera-overview .twin-scene {
+    transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.61) !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .camera-overview .twin-scene {
+    transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.56) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .camera-overview .twin-scene {
+    transform: translate(-50%, -48%) rotateX(0deg) rotateZ(0deg) scale(.48) !important;
+  }
+}
+
+/* ============================================================
+   FINAL OVERVIEW FIT — horizontal plant at 100% browser zoom
+   Keep the complete plant above the docked parking campus.
+   This final override intentionally supersedes earlier overview hotfixes.
+   ============================================================ */
+.camera-overview .twin-scene {
+  left: 50% !important;
+  top: 35% !important;
+  transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.56) !important;
+  transform-origin: 50% 50% !important;
+}
+
+.camera-overview .twin-room-label {
+  transform: translateZ(42px) rotateX(0deg) rotateZ(0deg) !important;
+  transform-origin: left top !important;
+}
+
+@media (max-width: 1450px) {
+  .camera-overview .twin-scene {
+    top: 35% !important;
+    transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.53) !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .camera-overview .twin-scene {
+    top: 34% !important;
+    transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.49) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .camera-overview .twin-scene {
+    top: 31% !important;
+    transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.44) !important;
+  }
 }

@@ -1221,7 +1221,14 @@ try {
   function renderSecurityZone() {
     return <SecurityCommandCenter
       security={securityStatus}
-      onOpenParking={() => window.open(import.meta.env.VITE_PARKING_APP_URL ?? "http://localhost:5501", "_blank", "noopener,noreferrer")}
+      onOpenParking={() =>
+  window.open(
+    import.meta.env.VITE_PARKING_APP_URL ??
+      "https://jd-dev-king.github.io/EES-Pharma-Parking-Access-Digital-Twin/",
+    "_blank",
+    "noopener,noreferrer"
+  )
+}
       onReturn={() => navigateTo("command")}
     />;
   }
@@ -1244,7 +1251,14 @@ try {
         alarms={currentAlarms}
         activeOrders={activeBatches}
         parking={parkingStatus}
-        onOpenParking={() => window.open(import.meta.env.VITE_PARKING_APP_URL ?? "http://localhost:5501", "_blank", "noopener,noreferrer")}
+        onOpenParking={() =>
+  window.open(
+    import.meta.env.VITE_PARKING_APP_URL ??
+      "https://jd-dev-king.github.io/EES-Pharma-Parking-Access-Digital-Twin/",
+    "_blank",
+    "noopener,noreferrer"
+  )
+}
         onNavigate={(zone) => navigateTo(zone as ZoneId)}
         onReturn={() => navigateTo("command")}
       />
