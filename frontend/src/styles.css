@@ -1886,3 +1886,19 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
     transform: translate(-50%, -47%) rotateX(0deg) rotateZ(0deg) scale(.44) !important;
   }
 }
+
+/* ============================================================
+   PRODUCTION SPACING STABILITY — prevent HUD-driven viewport stretch
+   The live SCADA/HUD becomes taller when production data is present.
+   CSS Grid's default stretch behavior was increasing .twin-viewport to
+   match that taller HUD, which pushed the bottom-anchored parking dock
+   far away from the plant. Keep the viewport at its own designed height
+   while allowing the HUD to grow independently.
+   ============================================================ */
+.twin-stage-panel {
+  align-items: start !important;
+}
+
+.twin-viewport {
+  align-self: start !important;
+}
