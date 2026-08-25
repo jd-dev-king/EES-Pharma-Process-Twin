@@ -7689,7 +7689,7 @@ footer {
    connects the status/launch controls to the parking visualization.
    ============================================================ */
 .twin-viewport {
-  min-height: 930px !important;
+  min-height: 980px !important;
   overflow: hidden !important;
 }
 
@@ -7734,7 +7734,15 @@ footer {
   position: absolute;
   left: 3%;
   right: 3%;
-  bottom: 2.4%;
+
+  /*
+    Anchor from the TOP, not the bottom.
+    Live production data makes this panel taller than the offline/dev state.
+    Bottom anchoring caused the extra height to grow upward into the plant.
+  */
+  top: clamp(500px, 56%, 545px);
+  bottom: auto;
+
   z-index: 80;
   min-height: 270px;
   width: auto;
@@ -7952,6 +7960,8 @@ footer {
     grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
     left: 2.5%;
     right: 2.5%;
+    top: clamp(500px, 57%, 550px);
+    bottom: auto;
   }
 
   .twin-scene {
@@ -7968,7 +7978,8 @@ footer {
 
   .parking-campus-panel {
     grid-template-columns: 1fr;
-    bottom: 2%;
+    top: 540px;
+    bottom: auto;
     min-height: 420px;
   }
 
