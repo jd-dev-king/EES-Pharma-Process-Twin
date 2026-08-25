@@ -2500,3 +2500,43 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
     grid-template-rows: repeat(3, 1fr);
   }
 }
+
+/* Keep parking campus separated from plant above */
+.parking-campus {
+  margin-top: 32px;
+  position: relative;
+  clear: both;
+}
+
+/* Preserve room for both physical lots */
+.parking-campus-visual {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 0.34fr);
+  gap: 14px;
+  min-width: 0;
+}
+
+/* Never allow the overflow heading to escape */
+.parking-campus-overflow {
+  min-width: 112px;
+  overflow: hidden;
+}
+
+.parking-campus-overflow > span,
+.parking-campus-overflow-title {
+  white-space: nowrap;
+  font-size: clamp(0.65rem, 0.7vw, 0.78rem);
+  letter-spacing: 0.08em;
+}
+
+/* Keep status/time inside left control area */
+.parking-campus-status {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.parking-campus-status span {
+  min-width: 0;
+  white-space: nowrap;
+  font-size: clamp(0.68rem, 0.75vw, 0.85rem);
+}

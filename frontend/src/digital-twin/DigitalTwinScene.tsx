@@ -40,6 +40,76 @@ interface DigitalTwinSceneProps {
 type CameraPreset = "overview" | "production" | "warehouse" | "labs" | "shipping";
 type State = "running" | "waiting" | "fault" | "cip" | "hold" | "complete";
 
+type ParkingSession = {
+  vehicle_identifier?: string;
+  occupant_type?: string;
+  space_number?: string | null;
+  overflow_space_number?: string | null;
+  entry_time?: string;
+};
+
+const securedSpaceNumbers = Array.from({ length: 7 }, (_, rowIndex) =>
+  Array.from({ length: 10 }, (_, columnIndex) =>
+    `${String.fromCharCode(65 + rowIndex)}${String(columnIndex + 1).padStart(2, "0")}`
+  )
+).flat();
+
+const overflowSpaceNumbers = Array.from(
+  { length: 30 },
+  (_, index) => `O${String(index + 1).padStart(2, "0")}`
+);
+
+function normalizeSpaceNumber(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+}
+
+function occupiedSpaceSet(
+  sessions: unknown[] | undefined,
+  fallbackCount: number,
+  orderedSpaces: string[],
+  overflow = false
+): Set<string> {
+  const realSpaces = new Set<string>();
+
+  for (const raw of sessions ?? []) {
+    const session = raw as ParkingSession;
+    const candidate = normalizeSpaceNumber(
+      overflow
+        ? (session.overflow_space_number ?? session.space_number)
+        : session.space_number
+    );
+
+    if (candidate) realSpaces.add(candidate);
+  }
+
+  if (realSpaces.size > 0) {
+    return realSpaces;
+  }
+
+  // Compatibility fallback only when a backend cannot provide assignment-level
+  // session data. Production should normally use the real space identifiers.
+  return new Set(orderedSpaces.slice(0, Math.max(0, fallbackCount)));
+}
+
+function autoRunLabel(phase: string | undefined, active: boolean | undefined): string {
+  if (active) return "AUTO RUN ACTIVE";
+
+  switch (String(phase ?? "IDLE").toUpperCase()) {
+    case "STOPPED":
+      return "AUTO RUN STOPPED";
+    case "COMPLETE":
+      return "AUTO RUN COMPLETE";
+    case "IDLE":
+    case "":
+      return "PARKING READY";
+    default:
+      return String(phase ?? "PARKING READY").replaceAll("_", " ");
+  }
+}
+
 const rooms: Array<{ zone: TwinZone; label: string; short: string; x: number; y: number; w: number; h: number }> = [
   { zone: "office", label: "Office", short: "OFF", x: 4, y: 5, w: 20, h: 18 },
   { zone: "warehouse", label: "Warehouse", short: "WH", x: 27, y: 5, w: 29, h: 24 },
@@ -96,6 +166,28 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
   const selectedRoom = rooms.find((room) => room.zone === selectedZone);
   const selectedAsset = selectedAssets.find((asset) => asset.code === selectedAssetCode) ?? selectedAssets[0] ?? null;
 
+
+  const securedOccupiedSpaces = useMemo(
+    () =>
+      occupiedSpaceSet(
+        parking?.active_sessions,
+        parking?.secured_occupied_spaces ?? 0,
+        securedSpaceNumbers
+      ),
+    [parking?.active_sessions, parking?.secured_occupied_spaces]
+  );
+
+  const overflowOccupiedSpaces = useMemo(
+    () =>
+      occupiedSpaceSet(
+        parking?.overflow_sessions,
+        parking?.overflow_occupied_spaces ?? 0,
+        overflowSpaceNumbers,
+        true
+      ),
+    [parking?.overflow_sessions, parking?.overflow_occupied_spaces]
+  );
+
   const selectRoom = (zone: TwinZone) => {
     setSelectedZone(zone);
     setSelectedAssetCode(null);
@@ -124,7 +216,7 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
         <article><span>Plant Connection</span><strong>{connected ? "ONLINE" : "OFFLINE"}</strong></article>
         <article><span>Active Orders</span><strong>{activeOrders}</strong></article>
         <article><span>Active Alarms</span><strong>{alarms}</strong></article>
-        <article><span>Parking</span><strong>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces}` : "OFFLINE"}</strong></article>
+        <article><span>Parking</span><strong>{parking?.available ? `${parking.total_parked}/${parking.total_parking_capacity}` : "OFFLINE"}</strong></article>
         <article><span>Selected Zone</span><strong>{selectedRoom?.label ?? "Plant"}</strong></article>
       </section>
 
@@ -230,17 +322,16 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
               {parking?.available && (
                 <div className="parking-campus-simulation">
                   <span>
-                    {parking.auto_run_active
-                      ? "AUTO RUN ACTIVE"
-                      : parking.auto_run_phase === "COMPLETE"
-                        ? "AUTO RUN COMPLETE"
-                        : "PARKING READY"}
+                    {autoRunLabel(
+                      parking.auto_run_phase,
+                      parking.auto_run_active
+                    )}
                   </span>
 
                   <small>
                     {parking.sim_day && parking.sim_time
                       ? `${parking.sim_day} · ${parking.sim_time}`
-                      : parking.auto_run_phase}
+                      : String(parking.auto_run_phase ?? "IDLE").replaceAll("_", " ")}
                   </small>
                 </div>
               )}
@@ -265,12 +356,14 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
                 </span>
 
                 <span className="parking-campus-grid">
-                  {Array.from({ length: 70 }).map((_, index) => (
+                  {securedSpaceNumbers.map((spaceNumber) => (
                     <i
-                      key={index}
+                      key={spaceNumber}
+                      data-space={spaceNumber}
+                      title={spaceNumber}
                       className={
                         parking?.available &&
-                          index < Math.min(70, parking.secured_occupied_spaces)
+                        securedOccupiedSpaces.has(spaceNumber)
                           ? "occupied"
                           : ""
                       }
@@ -293,12 +386,14 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
                 </span>
 
                 <span className="parking-campus-overflow-grid">
-                  {Array.from({ length: 30 }).map((_, index) => (
+                  {overflowSpaceNumbers.map((spaceNumber) => (
                     <i
-                      key={index}
+                      key={spaceNumber}
+                      data-space={spaceNumber}
+                      title={spaceNumber}
                       className={
                         parking?.available &&
-                          index < Math.min(30, parking.overflow_occupied_spaces)
+                        overflowOccupiedSpaces.has(spaceNumber)
                           ? "occupied"
                           : ""
                       }
@@ -329,8 +424,8 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
           </div>
           <ScadaOverlay asset={selectedAsset} zone={selectedZone} onOpenDepartment={onNavigate} onOpenAutomation={() => onNavigate("automation")} />
           <div className="twin-parking-hud">
-            <div><span>Campus Access</span><strong>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces} occupied` : "Parking API offline"}</strong></div>
-            <small>{parking?.available ? `${parking.employees} employees · ${parking.visitors} visitors currently on site` : "The Process Twin remains operational independently."}</small>
+            <div><span>Campus Access</span><strong>{parking?.available ? `${parking.total_parked}/${parking.total_parking_capacity} parked` : "Parking API offline"}</strong></div>
+            <small>{parking?.available ? `${parking.employees} employees · ${parking.contractors} contractors · ${parking.visitors} visitors currently on site` : "The Process Twin remains operational independently."}</small>
             <button className="button secondary" onClick={onOpenParking}>Open Parking Digital Twin</button>
           </div>
           <div className="twin-hud-actions">
