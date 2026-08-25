@@ -182,53 +182,417 @@ def _normalize_parking_summary(source):
 
 def facility_parking_status(db: Session):
     """
-    Parking Access is the authoritative parking digital twin.
+    Read-only aggregation of the dedicated Parking Access Digital Twin.
 
-    Prefer its API. PostgreSQL is read-only fallback for the secured lot.
+    Parking Access remains the system of record.
+
+    Production state is split across:
+      /api/parking/status
+      /api/parking/overflow-status
+      /api/auto-run/status
     """
 
-    remote = _remote_parking_json([
-        "/api/facility/parking-status",
+    secured = _remote_parking_json([
         "/api/parking/status",
+        "/api/facility/parking-status",
         "/api/v1/parking/status",
         "/api/status",
     ])
 
-    normalized = _normalize_parking_summary(remote)
+    overflow = _remote_parking_json([
+        "/api/parking/overflow-status",
+    ])
 
-    if normalized:
-        return normalized
+    auto_run = _remote_parking_json([
+        "/api/auto-run/status",
+    ])
 
+    if secured and isinstance(secured, dict):
+        try:
+            secured_capacity = int(
+                secured.get(
+                    "capacity",
+                    secured.get("total_spaces", 70),
+                )
+                or 70
+            )
+
+            secured_occupied = int(
+                secured.get(
+                    "occupied",
+                    secured.get("occupied_spaces", 0),
+                )
+                or 0
+            )
+
+            secured_available = int(
+                secured.get(
+                    "remaining",
+                    secured.get(
+                        "available_spaces",
+                        max(
+                            secured_capacity - secured_occupied,
+                            0,
+                        ),
+                    ),
+                )
+                or 0
+            )
+
+            overflow_capacity = int(
+                (
+                    overflow.get("capacity", 30)
+                    if isinstance(overflow, dict)
+                    else 30
+                )
+                or 30
+            )
+
+            overflow_occupied = int(
+                (
+                    overflow.get("occupied", 0)
+                    if isinstance(overflow, dict)
+                    else 0
+                )
+                or 0
+            )
+
+            overflow_available = int(
+                (
+                    overflow.get(
+                        "remaining",
+                        max(
+                            overflow_capacity - overflow_occupied,
+                            0,
+                        ),
+                    )
+                    if isinstance(overflow, dict)
+                    else overflow_capacity
+                )
+                or 0
+            )
+
+            total_capacity = (
+                secured_capacity +
+                overflow_capacity
+            )
+
+            total_parked = (
+                secured_occupied +
+                overflow_occupied
+            )
+
+            total_available = max(
+                total_capacity - total_parked,
+                0,
+            )
+
+            #
+            # Auto Run status contains the combined
+            # secured + overflow occupant totals.
+            #
+            if isinstance(auto_run, dict):
+                employees = int(
+                    auto_run.get(
+                        "employees",
+                        secured.get("employees", 0),
+                    )
+                    or 0
+                )
+
+                contractors = int(
+                    auto_run.get(
+                        "contractors_on_site",
+                        0,
+                    )
+                    or 0
+                )
+
+                visitors = int(
+                    auto_run.get(
+                        "visitors_on_site",
+                        auto_run.get(
+                            "visitors",
+                            secured.get("visitors", 0),
+                        ),
+                    )
+                    or 0
+                )
+
+            else:
+                employees = int(
+                    secured.get("employees", 0)
+                    or 0
+                )
+
+                contractors = 0
+
+                visitors = int(
+                    secured.get("visitors", 0)
+                    or 0
+                )
+
+            return {
+                "available": True,
+
+                "lot_code": "PHARMA-EMPLOYEE",
+                "lot_name": "Pharma Employee Parking",
+
+                #
+                # Legacy fields remain secured-lot aliases
+                # for compatibility with older consumers.
+                #
+                "total_spaces": secured_capacity,
+                "occupied_spaces": secured_occupied,
+                "available_spaces": secured_available,
+
+                "occupancy_percent": round(
+                    (
+                        secured_occupied /
+                        secured_capacity *
+                        100
+                    )
+                    if secured_capacity
+                    else 0,
+                    1,
+                ),
+
+                #
+                # Secured main lot
+                #
+                "secured_total_spaces":
+                    secured_capacity,
+
+                "secured_occupied_spaces":
+                    secured_occupied,
+
+                "secured_available_spaces":
+                    secured_available,
+
+                #
+                # Overflow lot
+                #
+                "overflow_total_spaces":
+                    overflow_capacity,
+
+                "overflow_occupied_spaces":
+                    overflow_occupied,
+
+                "overflow_available_spaces":
+                    overflow_available,
+
+                #
+                # Combined campus parking
+                #
+                "total_parking_capacity":
+                    total_capacity,
+
+                "total_parked":
+                    total_parked,
+
+                "total_available_spaces":
+                    total_available,
+
+                #
+                # Combined occupants
+                #
+                "employees": employees,
+                "contractors": contractors,
+                "visitors": visitors,
+
+                #
+                # Auto Run
+                #
+                "auto_run_active": bool(
+                    auto_run.get("active", False)
+                    if isinstance(auto_run, dict)
+                    else False
+                ),
+
+                "auto_run_phase": str(
+                    auto_run.get("phase", "IDLE")
+                    if isinstance(auto_run, dict)
+                    else "IDLE"
+                ),
+
+                "sim_day": str(
+                    auto_run.get("sim_day", "")
+                    if isinstance(auto_run, dict)
+                    else ""
+                ),
+
+                "sim_time": str(
+                    auto_run.get("sim_time", "")
+                    if isinstance(auto_run, dict)
+                    else ""
+                ),
+
+                "current_event": str(
+                    auto_run.get("current_event", "")
+                    if isinstance(auto_run, dict)
+                    else ""
+                ),
+
+                "next_event": str(
+                    auto_run.get("next_event", "")
+                    if isinstance(auto_run, dict)
+                    else ""
+                ),
+
+                #
+                # Live rosters
+                #
+                "active_sessions":
+                    secured.get(
+                        "active_sessions",
+                        [],
+                    )
+                    or [],
+
+                "overflow_sessions":
+                    (
+                        overflow.get(
+                            "active_sessions",
+                            [],
+                        )
+                        if isinstance(
+                            overflow,
+                            dict,
+                        )
+                        else []
+                    )
+                    or [],
+
+                "overflow_vehicles":
+                    (
+                        auto_run.get(
+                            "overflow_vehicles",
+                            [],
+                        )
+                        if isinstance(
+                            auto_run,
+                            dict,
+                        )
+                        else []
+                    )
+                    or [],
+            }
+
+        except (
+            TypeError,
+            ValueError,
+            KeyError,
+        ):
+            pass
+
+    #
+    # PostgreSQL fallback
+    #
     try:
         summary = db.execute(text("""
             SELECT
                 COUNT(*) FILTER (
-                    WHERE ps.session_status = 'ACTIVE'
+                    WHERE ps.session_status='ACTIVE'
                 ) AS occupied,
 
                 COUNT(*) FILTER (
-                    WHERE ps.session_status = 'ACTIVE'
-                      AND ps.occupant_type = 'EMPLOYEE'
+                    WHERE ps.session_status='ACTIVE'
+                      AND ps.occupant_type='EMPLOYEE'
                 ) AS employees,
 
                 COUNT(*) FILTER (
-                    WHERE ps.session_status = 'ACTIVE'
-                      AND ps.occupant_type = 'VISITOR'
+                    WHERE ps.session_status='ACTIVE'
+                      AND ps.occupant_type='VISITOR'
                 ) AS visitors
 
             FROM parking_access.parking_sessions ps
         """)).mappings().one()
 
-        total = int(
+        secured_capacity = int(
             db.execute(
-                text("SELECT COUNT(*) FROM parking_access.parking_spaces")
+                text("""
+                    SELECT COUNT(*)
+                    FROM parking_access.parking_spaces
+                """)
             ).scalar_one()
             or 0
         )
 
-        occupied = int(summary["occupied"] or 0)
-        employees = int(summary["employees"] or 0)
-        visitors = int(summary["visitors"] or 0)
+        secured_occupied = int(
+            summary["occupied"]
+            or 0
+        )
+
+        #
+        # Overflow fallback is also read from PostgreSQL.
+        # Do not hard-code it to zero.
+        #
+        overflow_summary = db.execute(text("""
+            SELECT
+                COUNT(*) AS occupied,
+
+                COUNT(*) FILTER (
+                    WHERE occupant_type='EMPLOYEE'
+                ) AS employees,
+
+                COUNT(*) FILTER (
+                    WHERE occupant_type='CONTRACTOR'
+                ) AS contractors,
+
+                COUNT(*) FILTER (
+                    WHERE occupant_type='VISITOR'
+                ) AS visitors
+
+            FROM parking_access.overflow_sessions
+            WHERE session_status='ACTIVE'
+        """)).mappings().one()
+
+        overflow_capacity = int(
+            db.execute(
+                text("""
+                    SELECT COUNT(*)
+                    FROM parking_access.overflow_spaces
+                    WHERE active=TRUE
+                """)
+            ).scalar_one()
+            or 30
+        )
+
+        overflow_occupied = int(
+            overflow_summary["occupied"]
+            or 0
+        )
+
+        employees = (
+            int(summary["employees"] or 0) +
+            int(
+                overflow_summary["employees"]
+                or 0
+            )
+        )
+
+        visitors = (
+            int(summary["visitors"] or 0) +
+            int(
+                overflow_summary["visitors"]
+                or 0
+            )
+        )
+
+        contractors = int(
+            overflow_summary["contractors"]
+            or 0
+        )
+
+        total_capacity = (
+            secured_capacity +
+            overflow_capacity
+        )
+
+        total_parked = (
+            secured_occupied +
+            overflow_occupied
+        )
 
         return {
             "available": True,
@@ -236,32 +600,71 @@ def facility_parking_status(db: Session):
             "lot_code": "PHARMA-EMPLOYEE",
             "lot_name": "Pharma Employee Parking",
 
-            # Legacy secured-lot fields.
-            "total_spaces": total,
-            "occupied_spaces": occupied,
-            "available_spaces": max(0, total - occupied),
+            "total_spaces":
+                secured_capacity,
+
+            "occupied_spaces":
+                secured_occupied,
+
+            "available_spaces":
+                max(
+                    secured_capacity -
+                    secured_occupied,
+                    0,
+                ),
+
             "occupancy_percent": round(
-                (occupied / total * 100) if total else 0,
+                (
+                    secured_occupied /
+                    secured_capacity *
+                    100
+                )
+                if secured_capacity
+                else 0,
                 1,
             ),
 
-            # Explicit secured lot.
-            "secured_total_spaces": total,
-            "secured_occupied_spaces": occupied,
-            "secured_available_spaces": max(0, total - occupied),
+            "secured_total_spaces":
+                secured_capacity,
 
-            # Overflow cannot be reconstructed reliably from this
-            # legacy DB fallback, so do not invent occupancy.
-            "overflow_total_spaces": 30,
-            "overflow_occupied_spaces": 0,
-            "overflow_available_spaces": 30,
+            "secured_occupied_spaces":
+                secured_occupied,
 
-            "total_parking_capacity": total + 30,
-            "total_parked": occupied,
-            "total_available_spaces": max(0, total - occupied) + 30,
+            "secured_available_spaces":
+                max(
+                    secured_capacity -
+                    secured_occupied,
+                    0,
+                ),
+
+            "overflow_total_spaces":
+                overflow_capacity,
+
+            "overflow_occupied_spaces":
+                overflow_occupied,
+
+            "overflow_available_spaces":
+                max(
+                    overflow_capacity -
+                    overflow_occupied,
+                    0,
+                ),
+
+            "total_parking_capacity":
+                total_capacity,
+
+            "total_parked":
+                total_parked,
+
+            "total_available_spaces":
+                max(
+                    total_capacity -
+                    total_parked,
+                    0,
+                ),
 
             "employees": employees,
-            "contractors": 0,
+            "contractors": contractors,
             "visitors": visitors,
 
             "auto_run_active": False,

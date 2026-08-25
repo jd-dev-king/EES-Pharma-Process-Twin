@@ -2358,3 +2358,145 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
     grid-template-rows: repeat(3, 1fr);
   }
 }
+
+/* ============================================================
+   v2.0.3 — Pharma Parking Responsive Production Hotfix
+   Keeps 70-space secured + 30-space overflow visible at 100%.
+   ============================================================ */
+
+.parking-campus-panel {
+  width: 100%;
+  min-width: 0;
+
+  grid-template-columns:
+    minmax(175px, 0.72fr)
+    minmax(0, 1.55fr);
+
+  gap: 0.7rem;
+  overflow: hidden;
+}
+
+.parking-campus-panel-info {
+  min-width: 0;
+  width: 100%;
+}
+
+.parking-campus-lots {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 2.15fr)
+    minmax(88px, 0.78fr);
+
+  gap: 0.6rem;
+
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.parking-campus-main-lot,
+.parking-campus-overflow-lot {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.parking-campus-main-lot {
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+}
+
+.parking-campus-overflow-lot {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.parking-campus-grid {
+  width: 100%;
+  min-width: 0;
+
+  grid-template-columns:
+    repeat(10, minmax(0, 1fr));
+
+  gap: clamp(2px, 0.25vw, 4px);
+}
+
+.parking-campus-grid > i {
+  width: 100%;
+  min-width: 0;
+}
+
+.parking-campus-overflow-grid {
+  width: 100%;
+  min-width: 0;
+
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+
+  gap: clamp(2px, 0.22vw, 4px);
+}
+
+.parking-campus-overflow-grid > i {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Prevent the text/metrics side from forcing the lots off-screen. */
+.parking-campus-panel-info h3,
+.parking-campus-panel-info small,
+.parking-campus-panel-status {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.parking-campus-metrics {
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+}
+
+.parking-campus-metrics article {
+  min-width: 0;
+}
+
+/* Production center-column width protection. */
+@media (max-width: 1500px) {
+  .parking-campus-panel {
+    grid-template-columns:
+      minmax(165px, 0.68fr)
+      minmax(0, 1.6fr);
+  }
+
+  .parking-campus-lots {
+    grid-template-columns:
+      minmax(0, 2.25fr)
+      minmax(82px, 0.72fr);
+  }
+}
+
+/* Only stack when genuinely narrow — not normal desktop 100% zoom. */
+@media (max-width: 900px) {
+  .parking-campus-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .parking-campus-lots {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(110px, 0.35fr);
+  }
+}
+
+@media (max-width: 650px) {
+  .parking-campus-lots {
+    grid-template-columns: 1fr;
+  }
+
+  .parking-campus-overflow-grid {
+    grid-template-columns:
+      repeat(10, minmax(0, 1fr));
+    grid-template-rows: repeat(3, 1fr);
+  }
+}
