@@ -782,3 +782,1411 @@ def rnd_formula_materials(db: Session, material_number: str) -> list[dict[str, A
     except Exception:
         db.rollback()
         return []
+    
+# ============================================================
+# EES PHARMA WORKFORCE
+# Authoritative workforce / training reads from ees_data_platform
+# ============================================================
+
+
+def list_workforce_employees(db: Session) -> list[dict]:
+    """
+    Return the authoritative Pharma workforce.
+
+    Identity, department, role and shift are sourced from the
+    workforce schema in ees_data_platform.
+
+    Includes ACTIVE, LEAVE and INACTIVE employees so the Workforce
+    UI can represent the complete master population.
+    """
+
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                s.employee_id,
+                s.site_code,
+                s.employee_number,
+                s.display_name,
+
+                m.first_name,
+                m.last_name,
+
+                s.employment_type,
+                s.employment_status,
+                s.commute_mode,
+
+                s.department_code,
+                s.department_name,
+
+                s.role_id,
+                s.role_code,
+                s.role_name,
+                s.role_level,
+
+                s.shift_id,
+                s.shift_code,
+                s.shift_name,
+                s.schedule_family,
+
+                s.start_time,
+                s.end_time,
+                s.crosses_midnight,
+                s.operating_days,
+                s.on_call
+
+            FROM workforce.v_current_employee_schedule s
+
+            JOIN workforce.v_employee_master m
+              ON m.employee_id = s.employee_id
+
+            WHERE s.site_code = 'PHARMA-001'
+
+            ORDER BY
+                CASE s.employment_status
+                    WHEN 'ACTIVE' THEN 1
+                    WHEN 'LEAVE' THEN 2
+                    WHEN 'INACTIVE' THEN 3
+                    ELSE 4
+                END,
+                s.department_name,
+                s.shift_name,
+                s.display_name
+            """
+        )
+    ).mappings().all()
+
+    return [
+        {
+            **dict(row),
+
+            "start_time":
+                row["start_time"].isoformat()
+                if row["start_time"] is not None
+                else None,
+
+            "end_time":
+                row["end_time"].isoformat()
+                if row["end_time"] is not None
+                else None,
+
+            "operating_days":
+                list(row["operating_days"])
+                if row["operating_days"] is not None
+                else [],
+        }
+        for row in rows
+    ]
+
+
+def get_workforce_summary(db: Session) -> dict:
+    """
+    Top-level authoritative Pharma workforce counts.
+    """
+
+    summary = db.execute(
+        text(
+            """
+            SELECT
+                COUNT(*) AS total,
+
+                COUNT(*) FILTER (
+                    WHERE employment_status = 'ACTIVE'
+                ) AS active,
+
+                COUNT(*) FILTER (
+                    WHERE employment_status = 'LEAVE'
+                ) AS on_leave,
+
+                COUNT(*) FILTER (
+                    WHERE employment_status = 'INACTIVE'
+                ) AS inactive,
+
+                COUNT(*) FILTER (
+                    WHERE employment_type = 'PERMANENT'
+                ) AS permanent,
+
+                COUNT(*) FILTER (
+                    WHERE employment_type = 'TEMPORARY'
+                ) AS temporary
+
+            FROM workforce.employees
+
+            WHERE site_code = 'PHARMA-001'
+            """
+        )
+    ).mappings().one()
+
+    departments = db.execute(
+        text(
+            """
+            SELECT
+                department_name,
+                COUNT(*) AS headcount,
+
+                COUNT(*) FILTER (
+                    WHERE employment_status = 'ACTIVE'
+                ) AS active,
+
+                COUNT(*) FILTER (
+                    WHERE employment_type = 'TEMPORARY'
+                ) AS temporary
+
+            FROM workforce.employees
+
+            WHERE site_code = 'PHARMA-001'
+
+            GROUP BY department_name
+
+            ORDER BY department_name
+            """
+        )
+    ).mappings().all()
+
+    return {
+        "total": int(summary["total"] or 0),
+        "active": int(summary["active"] or 0),
+        "on_leave": int(summary["on_leave"] or 0),
+        "inactive": int(summary["inactive"] or 0),
+        "permanent": int(summary["permanent"] or 0),
+        "temporary": int(summary["temporary"] or 0),
+
+        "departments": [
+            {
+                "department_name": row["department_name"],
+                "headcount": int(row["headcount"] or 0),
+                "active": int(row["active"] or 0),
+                "temporary": int(row["temporary"] or 0),
+            }
+            for row in departments
+        ],
+    }
+
+
+def list_workforce_training(db: Session) -> list[dict]:
+    """
+    Required training matrix by employee.
+
+    Requirements come from the employee's ACTIVE primary role.
+    Current status comes from the latest employee training record.
+
+    This means PERMANENT and TEMPORARY employees with the same
+    role automatically receive identical requirements.
+    """
+
+    rows = db.execute(
+        text(
+            """
+            WITH latest_training AS (
+                SELECT DISTINCT ON (
+                    et.employee_id,
+                    et.course_id
+                )
+                    et.employee_id,
+                    et.course_id,
+                    et.employee_training_id,
+                    et.training_status,
+                    et.assigned_at,
+                    et.completed_at,
+                    et.expires_at,
+                    et.completion_score,
+
+                    CASE
+                        WHEN et.training_status = 'REVOKED'
+                            THEN 'REVOKED'
+
+                        WHEN et.training_status = 'FAILED'
+                            THEN 'FAILED'
+
+                        WHEN et.training_status <> 'COMPLETED'
+                            THEN et.training_status
+
+                        WHEN et.expires_at IS NOT NULL
+                         AND et.expires_at <= now()
+                            THEN 'EXPIRED'
+
+                        ELSE 'CURRENT'
+                    END AS effective_status
+
+                FROM pharma.employee_training et
+
+                ORDER BY
+                    et.employee_id,
+                    et.course_id,
+                    et.assigned_at DESC,
+                    et.employee_training_id DESC
+            )
+
+            SELECT
+                e.employee_id,
+                e.employee_number,
+                e.display_name,
+                e.department_name,
+                e.employment_type,
+                e.employment_status,
+
+                r.role_code,
+                r.role_name,
+
+                c.course_id,
+                c.course_code,
+                c.course_name,
+                c.training_category,
+                c.gmp_relevant,
+                c.required_for_site_access,
+                c.validity_days,
+
+                COALESCE(
+                    lt.effective_status,
+                    'MISSING'
+                ) AS effective_status,
+
+                lt.training_status AS recorded_status,
+                lt.assigned_at,
+                lt.completed_at,
+                lt.expires_at,
+                lt.completion_score
+
+            FROM workforce.employees e
+
+            JOIN workforce.employee_role_assignments era
+              ON era.employee_id = e.employee_id
+             AND era.active = true
+             AND era.is_primary = true
+             AND era.effective_start_date <= CURRENT_DATE
+             AND (
+                    era.effective_end_date IS NULL
+                    OR era.effective_end_date >= CURRENT_DATE
+                 )
+
+            JOIN workforce.roles r
+              ON r.role_id = era.role_id
+
+            JOIN pharma.role_training_requirements req
+              ON req.role_id = era.role_id
+             AND req.requirement_type = 'REQUIRED'
+             AND req.active = true
+
+            JOIN pharma.training_courses c
+              ON c.course_id = req.course_id
+             AND c.active = true
+
+            LEFT JOIN latest_training lt
+              ON lt.employee_id = e.employee_id
+             AND lt.course_id = c.course_id
+
+            WHERE e.site_code = 'PHARMA-001'
+
+            ORDER BY
+                e.department_name,
+                e.display_name,
+                c.course_name
+            """
+        )
+    ).mappings().all()
+
+    result = []
+
+    for row in rows:
+        item = dict(row)
+
+        for field in (
+            "assigned_at",
+            "completed_at",
+            "expires_at",
+        ):
+            value = item.get(field)
+            item[field] = (
+                value.isoformat()
+                if value is not None
+                else None
+            )
+
+        if item.get("completion_score") is not None:
+            item["completion_score"] = float(
+                item["completion_score"]
+            )
+
+        result.append(item)
+
+    return result
+
+
+def get_workforce_coverage(db: Session) -> dict:
+    """
+    Calculate qualification/training readiness from actual required
+    courses rather than deterministic frontend percentages.
+
+    Readiness =
+        current required courses / total required courses * 100
+    """
+
+    employee_rows = db.execute(
+        text(
+            """
+            WITH latest_training AS (
+                SELECT DISTINCT ON (
+                    et.employee_id,
+                    et.course_id
+                )
+                    et.employee_id,
+                    et.course_id,
+
+                    CASE
+                        WHEN et.training_status = 'REVOKED'
+                            THEN 'REVOKED'
+
+                        WHEN et.training_status = 'FAILED'
+                            THEN 'FAILED'
+
+                        WHEN et.training_status <> 'COMPLETED'
+                            THEN et.training_status
+
+                        WHEN et.expires_at IS NOT NULL
+                         AND et.expires_at <= now()
+                            THEN 'EXPIRED'
+
+                        ELSE 'CURRENT'
+                    END AS effective_status
+
+                FROM pharma.employee_training et
+
+                ORDER BY
+                    et.employee_id,
+                    et.course_id,
+                    et.assigned_at DESC,
+                    et.employee_training_id DESC
+            ),
+
+            employee_requirements AS (
+                SELECT
+                    e.employee_id,
+                    e.employee_number,
+                    e.display_name,
+                    e.department_name,
+                    e.employment_type,
+                    e.employment_status,
+
+                    r.role_code,
+                    r.role_name,
+
+                    COUNT(req.course_id)
+                        AS required_courses,
+
+                    COUNT(req.course_id) FILTER (
+                        WHERE lt.effective_status = 'CURRENT'
+                    ) AS current_courses
+
+                FROM workforce.employees e
+
+                JOIN workforce.employee_role_assignments era
+                  ON era.employee_id = e.employee_id
+                 AND era.active = true
+                 AND era.is_primary = true
+                 AND era.effective_start_date <= CURRENT_DATE
+                 AND (
+                        era.effective_end_date IS NULL
+                        OR era.effective_end_date >= CURRENT_DATE
+                     )
+
+                JOIN workforce.roles r
+                  ON r.role_id = era.role_id
+
+                JOIN pharma.role_training_requirements req
+                  ON req.role_id = r.role_id
+                 AND req.active = true
+                 AND req.requirement_type = 'REQUIRED'
+
+                LEFT JOIN latest_training lt
+                  ON lt.employee_id = e.employee_id
+                 AND lt.course_id = req.course_id
+
+                WHERE e.site_code = 'PHARMA-001'
+
+                GROUP BY
+                    e.employee_id,
+                    e.employee_number,
+                    e.display_name,
+                    e.department_name,
+                    e.employment_type,
+                    e.employment_status,
+                    r.role_code,
+                    r.role_name
+            )
+
+            SELECT
+                *,
+
+                CASE
+                    WHEN required_courses = 0
+                        THEN 100
+                    ELSE
+                        ROUND(
+                            (
+                                current_courses::numeric
+                                / required_courses::numeric
+                            ) * 100
+                        )
+                END AS readiness
+
+            FROM employee_requirements
+
+            ORDER BY
+                department_name,
+                display_name
+            """
+        )
+    ).mappings().all()
+
+    employees = [
+        {
+            "employee_id": row["employee_id"],
+            "employee_number": row["employee_number"],
+            "display_name": row["display_name"],
+            "department_name": row["department_name"],
+            "employment_type": row["employment_type"],
+            "employment_status": row["employment_status"],
+            "role_code": row["role_code"],
+            "role_name": row["role_name"],
+            "required_courses": int(
+                row["required_courses"] or 0
+            ),
+            "current_courses": int(
+                row["current_courses"] or 0
+            ),
+            "readiness": int(
+                row["readiness"] or 0
+            ),
+        }
+        for row in employee_rows
+    ]
+
+    department_map: dict[str, dict] = {}
+
+    for employee in employees:
+        department = (
+            employee["department_name"]
+            or "Unassigned"
+        )
+
+        bucket = department_map.setdefault(
+            department,
+            {
+                "department_name": department,
+                "employees": 0,
+                "active_employees": 0,
+                "readiness_total": 0,
+            },
+        )
+
+        bucket["employees"] += 1
+        bucket["readiness_total"] += employee["readiness"]
+
+        if employee["employment_status"] == "ACTIVE":
+            bucket["active_employees"] += 1
+
+    departments = []
+
+    for bucket in department_map.values():
+        employees_count = bucket["employees"]
+
+        departments.append(
+            {
+                "department_name":
+                    bucket["department_name"],
+
+                "employees":
+                    employees_count,
+
+                "active_employees":
+                    bucket["active_employees"],
+
+                "readiness":
+                    round(
+                        bucket["readiness_total"]
+                        / employees_count
+                    )
+                    if employees_count
+                    else 0,
+            }
+        )
+
+    departments.sort(
+        key=lambda item:
+            item["department_name"] or ""
+    )
+
+    return {
+        "employees": employees,
+        "departments": departments,
+    }
+    
+# ============================================================
+# EES PHARMA SECURITY
+# Workforce qualification / controlled-zone access
+# ============================================================
+
+
+def list_security_employees(db: Session) -> list[dict]:
+    """
+    Security-facing workforce roster.
+
+    Security consumes workforce identity, employment, role,
+    shift, training qualifications and zone authorization.
+    """
+
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                s.employee_id,
+                s.employee_number,
+                s.display_name,
+                s.employment_type,
+                s.employment_status,
+
+                s.department_code,
+                s.department_name,
+
+                s.role_code,
+                s.role_name,
+
+                s.shift_code,
+                s.shift_name,
+                s.start_time,
+                s.end_time,
+
+                COUNT(*) FILTER (
+                    WHERE a.authorization_status = 'AUTHORIZED'
+                ) AS authorized_zones,
+
+                COUNT(*) FILTER (
+                    WHERE a.authorization_status = 'DENIED'
+                ) AS denied_zones
+
+            FROM workforce.v_current_employee_schedule s
+
+            LEFT JOIN security.employee_access_authorizations a
+              ON a.employee_id = s.employee_id
+
+            WHERE s.site_code = 'PHARMA-001'
+
+            GROUP BY
+                s.employee_id,
+                s.employee_number,
+                s.display_name,
+                s.employment_type,
+                s.employment_status,
+                s.department_code,
+                s.department_name,
+                s.role_code,
+                s.role_name,
+                s.shift_code,
+                s.shift_name,
+                s.start_time,
+                s.end_time
+
+            ORDER BY
+                CASE s.employment_status
+                    WHEN 'ACTIVE' THEN 1
+                    WHEN 'LEAVE' THEN 2
+                    WHEN 'INACTIVE' THEN 3
+                    ELSE 4
+                END,
+                s.department_name,
+                s.display_name
+            """
+        )
+    ).mappings().all()
+
+    return [
+        {
+            **dict(row),
+
+            "start_time":
+                row["start_time"].isoformat()
+                if row["start_time"] is not None
+                else None,
+
+            "end_time":
+                row["end_time"].isoformat()
+                if row["end_time"] is not None
+                else None,
+
+            "authorized_zones":
+                int(row["authorized_zones"] or 0),
+
+            "denied_zones":
+                int(row["denied_zones"] or 0),
+        }
+        for row in rows
+    ]
+
+
+def get_security_employee(db: Session, employee_id: int) -> dict:
+    """
+    Full Security employee faceplate:
+      - workforce identity
+      - role / shift
+      - required training
+      - GMP qualifications
+      - zone authorization
+    """
+
+    employee = db.execute(
+        text(
+            """
+            SELECT
+                s.employee_id,
+                s.employee_number,
+                s.display_name,
+                s.employment_type,
+                s.employment_status,
+                s.commute_mode,
+
+                s.department_code,
+                s.department_name,
+
+                s.role_code,
+                s.role_name,
+                s.role_level,
+
+                s.shift_code,
+                s.shift_name,
+                s.start_time,
+                s.end_time,
+                s.on_call
+
+            FROM workforce.v_current_employee_schedule s
+
+            WHERE s.site_code = 'PHARMA-001'
+              AND s.employee_id = :employee_id
+            """
+        ),
+        {
+            "employee_id": employee_id,
+        },
+    ).mappings().first()
+
+    if employee is None:
+        raise ValueError("Employee not found")
+
+    training = db.execute(
+        text(
+            """
+            SELECT
+                c.course_id,
+                c.course_code,
+                c.course_name,
+                c.training_category,
+                c.gmp_relevant,
+
+                COALESCE(
+                    ts.effective_status,
+                    'MISSING'
+                ) AS effective_status,
+
+                ts.completed_at,
+                ts.expires_at
+
+            FROM workforce.employee_role_assignments era
+
+            JOIN pharma.role_training_requirements req
+              ON req.role_id = era.role_id
+             AND req.requirement_type = 'REQUIRED'
+             AND req.active = true
+
+            JOIN pharma.training_courses c
+              ON c.course_id = req.course_id
+             AND c.active = true
+
+            LEFT JOIN pharma.v_employee_training_status ts
+              ON ts.employee_id = era.employee_id
+             AND ts.course_id = c.course_id
+
+            WHERE era.employee_id = :employee_id
+              AND era.active = true
+              AND era.is_primary = true
+
+            ORDER BY
+                c.gmp_relevant DESC,
+                c.course_name
+            """
+        ),
+        {
+            "employee_id": employee_id,
+        },
+    ).mappings().all()
+
+    qualifications = db.execute(
+        text(
+            """
+            SELECT
+                q.qualification_id,
+                q.qualification_code,
+                q.qualification_name,
+
+                egq.qualification_status,
+                egq.qualification_basis,
+                egq.qualified_at,
+                egq.expires_at,
+                egq.notes,
+
+                rg.required,
+                rg.active AS role_requirement_active
+
+            FROM workforce.employee_role_assignments era
+
+            JOIN pharma.role_gmp_requirements rg
+              ON rg.role_id = era.role_id
+             AND rg.active = true
+             AND rg.required = true
+
+            JOIN pharma.gmp_qualifications q
+              ON q.qualification_id = rg.qualification_id
+
+            LEFT JOIN pharma.employee_gmp_qualifications egq
+              ON egq.employee_id = era.employee_id
+             AND egq.qualification_id = q.qualification_id
+
+            WHERE era.employee_id = :employee_id
+              AND era.active = true
+              AND era.is_primary = true
+
+            ORDER BY q.qualification_code
+            """
+        ),
+        {
+            "employee_id": employee_id,
+        },
+    ).mappings().all()
+
+    zones = db.execute(
+        text(
+            """
+            SELECT
+                z.zone_id,
+                z.zone_code,
+                z.zone_name,
+                z.security_level,
+                z.gmp_controlled,
+
+                COALESCE(
+                    a.authorization_status,
+                    'DENIED'
+                ) AS authorization_status,
+
+                COALESCE(
+                    a.authorization_source,
+                    'AUTOMATIC'
+                ) AS authorization_source,
+
+                COALESCE(
+                    a.reason,
+                    'No current authorization record.'
+                ) AS reason,
+
+                a.last_evaluated_at
+
+            FROM security.access_zones z
+
+            LEFT JOIN security.employee_access_authorizations a
+              ON a.zone_id = z.zone_id
+             AND a.employee_id = :employee_id
+
+            WHERE z.site_code = 'PHARMA-001'
+              AND z.active = true
+
+            ORDER BY
+                z.security_level,
+                z.zone_code
+            """
+        ),
+        {
+            "employee_id": employee_id,
+        },
+    ).mappings().all()
+
+    employee_result = dict(employee)
+
+    for field in ("start_time", "end_time"):
+        value = employee_result.get(field)
+
+        employee_result[field] = (
+            value.isoformat()
+            if value is not None
+            else None
+        )
+
+    training_result = []
+
+    for row in training:
+        item = dict(row)
+
+        for field in (
+            "completed_at",
+            "expires_at",
+        ):
+            value = item.get(field)
+
+            item[field] = (
+                value.isoformat()
+                if value is not None
+                else None
+            )
+
+
+        training_result.append(item)
+
+    qualification_result = []
+
+    for row in qualifications:
+        item = dict(row)
+
+        for field in (
+            "qualified_at",
+            "expires_at",
+        ):
+            value = item.get(field)
+
+            item[field] = (
+                value.isoformat()
+                if value is not None
+                else None
+            )
+
+        qualification_result.append(item)
+
+    zone_result = []
+
+    for row in zones:
+        item = dict(row)
+
+        value = item.get(
+            "last_evaluated_at"
+        )
+
+        item["last_evaluated_at"] = (
+            value.isoformat()
+            if value is not None
+            else None
+        )
+
+        zone_result.append(item)
+
+    return {
+        "employee": employee_result,
+        "training": training_result,
+        "qualifications":
+            qualification_result,
+        "zones": zone_result,
+    }
+
+
+def get_security_summary(db: Session) -> dict:
+    """
+    Security Command Center KPIs.
+    """
+
+    row = db.execute(
+        text(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE e.employment_status = 'ACTIVE'
+                ) AS active_employees,
+
+                COUNT(*) FILTER (
+                    WHERE e.employment_status = 'LEAVE'
+                ) AS on_leave,
+
+                COUNT(*) FILTER (
+                    WHERE e.employment_status = 'INACTIVE'
+                ) AS inactive
+
+            FROM workforce.employees e
+
+            WHERE e.site_code = 'PHARMA-001'
+            """
+        )
+    ).mappings().one()
+
+    access = db.execute(
+        text(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE a.authorization_status = 'AUTHORIZED'
+                ) AS authorized,
+
+                COUNT(*) FILTER (
+                    WHERE a.authorization_status = 'DENIED'
+                ) AS denied
+
+            FROM security.employee_access_authorizations a
+
+            JOIN workforce.employees e
+              ON e.employee_id = a.employee_id
+
+            JOIN security.access_zones z
+              ON z.zone_id = a.zone_id
+
+            WHERE e.site_code = 'PHARMA-001'
+              AND z.site_code = 'PHARMA-001'
+              AND z.zone_code IN (
+                  'GREY',
+                  'WHITE'
+              )
+            """
+        )
+    ).mappings().one()
+
+    return {
+        "active_employees":
+            int(row["active_employees"] or 0),
+
+        "on_leave":
+            int(row["on_leave"] or 0),
+
+        "inactive":
+            int(row["inactive"] or 0),
+
+        "controlled_authorized":
+            int(access["authorized"] or 0),
+
+        "controlled_denied":
+            int(access["denied"] or 0),
+    }
+
+
+def reevaluate_security_employee(
+    db: Session,
+    employee_id: int,
+) -> dict:
+    """
+    Re-evaluate one employee's zone authorization.
+
+    Pharma training/qualification remains authoritative.
+    Security consumes those results and updates badge access.
+    """
+
+    employee = db.execute(
+        text(
+            """
+            SELECT
+                e.employee_id,
+                e.employment_status,
+                r.role_code
+
+            FROM workforce.employees e
+
+            JOIN workforce.employee_role_assignments era
+              ON era.employee_id = e.employee_id
+             AND era.active = true
+             AND era.is_primary = true
+
+            JOIN workforce.roles r
+              ON r.role_id = era.role_id
+
+            WHERE e.site_code = 'PHARMA-001'
+              AND e.employee_id = :employee_id
+            """
+        ),
+        {
+            "employee_id": employee_id,
+        },
+    ).mappings().first()
+
+    if employee is None:
+        raise ValueError("Employee not found")
+
+    # --------------------------------------------------------
+    # Non-active workforce:
+    # deny all normal access.
+    # --------------------------------------------------------
+
+    if employee["employment_status"] != "ACTIVE":
+
+        if employee["employment_status"] == "LEAVE":
+            denial_reason = (
+                "Employee currently on leave. "
+                "Security override required."
+            )
+
+        elif employee["employment_status"] == "INACTIVE":
+            denial_reason = (
+                "Employee inactive. "
+                "Normal badge access disabled."
+            )
+
+        else:
+            denial_reason = (
+                "Employee is not active. "
+                "Normal badge access disabled."
+            )
+
+        db.execute(
+            text(
+                """
+                INSERT INTO security.employee_access_authorizations (
+                    employee_id,
+                    zone_id,
+                    authorization_status,
+                    authorization_source,
+                    effective_from,
+                    reason,
+                    last_evaluated_at
+                )
+
+                SELECT
+                    :employee_id,
+                    z.zone_id,
+                    'DENIED',
+                    'AUTOMATIC',
+                    now(),
+                    :reason,
+                    now()
+
+                FROM security.access_zones z
+
+                WHERE z.site_code = 'PHARMA-001'
+                    AND z.active = true
+
+                ON CONFLICT (
+                    employee_id,
+                    zone_id
+                )
+                DO UPDATE SET
+                    authorization_status =
+                        'DENIED',
+
+                    authorization_source =
+                        'AUTOMATIC',
+
+                    reason =
+                        EXCLUDED.reason,
+
+                    last_evaluated_at =
+                        now(),
+
+                    updated_at =
+                        now()
+                """
+            ),
+            {
+                "employee_id": employee_id,
+                "reason": denial_reason
+            },
+        )
+
+        db.commit()
+
+        return get_security_employee(
+            db,
+            employee_id
+        )
+
+    # --------------------------------------------------------
+    # General-access zones.
+    # --------------------------------------------------------
+
+    db.execute(
+        text(
+            """
+            INSERT INTO security.employee_access_authorizations (
+                employee_id,
+                zone_id,
+                authorization_status,
+                authorization_source,
+                effective_from,
+                reason,
+                last_evaluated_at
+            )
+
+            SELECT
+                :employee_id,
+                z.zone_id,
+                'AUTHORIZED',
+                'AUTOMATIC',
+                now(),
+                'Active Pharma workforce general access.',
+                now()
+
+            FROM security.access_zones z
+
+            WHERE z.site_code = 'PHARMA-001'
+              AND z.zone_code IN (
+                  'EXTERIOR',
+                  'GENERAL',
+                  'BLACK'
+              )
+
+            ON CONFLICT (
+                employee_id,
+                zone_id
+            )
+            DO UPDATE SET
+                authorization_status =
+                    'AUTHORIZED',
+
+                authorization_source =
+                    'AUTOMATIC',
+
+                reason =
+                    'Active Pharma workforce general access.',
+
+                last_evaluated_at =
+                    now(),
+
+                updated_at =
+                    now()
+            """
+        ),
+        {
+            "employee_id":
+                employee_id,
+        },
+    )
+
+    # --------------------------------------------------------
+    # Security role:
+    # operational authorization to all zones without GMP.
+    # --------------------------------------------------------
+
+    if employee["role_code"] == "SEC-GUARD":
+        db.execute(
+            text(
+                """
+                INSERT INTO security.employee_access_authorizations (
+                    employee_id,
+                    zone_id,
+                    authorization_status,
+                    authorization_source,
+                    effective_from,
+                    reason,
+                    last_evaluated_at
+                )
+
+                SELECT
+                    :employee_id,
+                    z.zone_id,
+                    'AUTHORIZED',
+                    'AUTOMATIC',
+                    now(),
+                    'Security operational all-zone authorization.',
+                    now()
+
+                FROM security.access_zones z
+
+                WHERE z.site_code = 'PHARMA-001'
+
+                ON CONFLICT (
+                    employee_id,
+                    zone_id
+                )
+                DO UPDATE SET
+                    authorization_status =
+                        'AUTHORIZED',
+
+                    authorization_source =
+                        'AUTOMATIC',
+
+                    reason =
+                        'Security operational all-zone authorization.',
+
+                    last_evaluated_at =
+                        now(),
+
+                    updated_at =
+                        now()
+                """
+            ),
+            {
+                "employee_id":
+                    employee_id,
+            },
+        )
+
+        db.commit()
+
+        return get_security_employee(
+            db,
+            employee_id,
+        )
+
+    # --------------------------------------------------------
+    # Controlled zones.
+    #
+    # Role must require the qualification AND employee
+    # qualification must currently be QUALIFIED.
+    # --------------------------------------------------------
+
+    for zone_code, qualification_code in (
+        ("GREY", "GREY-QUAL"),
+        ("WHITE", "WHITE-QUAL"),
+    ):
+        evaluation = db.execute(
+            text(
+                """
+                SELECT
+                    CASE
+                        WHEN rg.role_id
+                             IS NULL
+                        THEN false
+
+                        WHEN egq.qualification_status =
+                             'QUALIFIED'
+                        THEN true
+
+                        ELSE false
+                    END AS authorized,
+
+                    CASE
+                        WHEN rg.role_id
+                             IS NULL
+                        THEN
+                            'Current role does not require this controlled zone.'
+
+                        WHEN egq.qualification_status =
+                             'QUALIFIED'
+                        THEN
+                            'Current required GMP qualification.'
+
+                        WHEN egq.qualification_status
+                             IS NULL
+                        THEN
+                            'Required qualification record is missing.'
+
+                        ELSE
+                            'Required zone qualification is incomplete, expired, or suspended.'
+                    END AS reason
+
+                FROM workforce.employee_role_assignments era
+
+                JOIN workforce.roles r
+                  ON r.role_id = era.role_id
+
+                CROSS JOIN pharma.gmp_qualifications q
+
+                LEFT JOIN pharma.role_gmp_requirements rg
+                  ON rg.role_id = r.role_id
+                 AND rg.qualification_id =
+                     q.qualification_id
+                 AND rg.active = true
+                 AND rg.required = true
+
+                LEFT JOIN pharma.employee_gmp_qualifications egq
+                  ON egq.employee_id =
+                     era.employee_id
+                 AND egq.qualification_id =
+                     q.qualification_id
+
+                WHERE era.employee_id =
+                      :employee_id
+
+                  AND era.active = true
+                  AND era.is_primary = true
+
+                  AND q.qualification_code =
+                      :qualification_code
+
+                LIMIT 1
+                """
+            ),
+            {
+                "employee_id":
+                    employee_id,
+
+                "qualification_code":
+                    qualification_code,
+            },
+        ).mappings().first()
+
+        authorized = bool(
+            evaluation
+            and evaluation["authorized"]
+        )
+
+        reason = (
+            evaluation["reason"]
+            if evaluation
+            else
+            "Controlled-zone evaluation unavailable."
+        )
+
+        db.execute(
+            text(
+                """
+                INSERT INTO security.employee_access_authorizations (
+                    employee_id,
+                    zone_id,
+                    authorization_status,
+                    authorization_source,
+                    effective_from,
+                    reason,
+                    last_evaluated_at
+                )
+
+                SELECT
+                    :employee_id,
+                    z.zone_id,
+                    :authorization_status,
+                    'AUTOMATIC',
+                    now(),
+                    :reason,
+                    now()
+
+                FROM security.access_zones z
+
+                WHERE z.site_code =
+                      'PHARMA-001'
+
+                  AND z.zone_code =
+                      :zone_code
+
+                ON CONFLICT (
+                    employee_id,
+                    zone_id
+                )
+                DO UPDATE SET
+                    authorization_status =
+                        EXCLUDED.authorization_status,
+
+                    authorization_source =
+                        'AUTOMATIC',
+
+                    reason =
+                        EXCLUDED.reason,
+
+                    last_evaluated_at =
+                        now(),
+
+                    updated_at =
+                        now()
+                """
+            ),
+            {
+                "employee_id":
+                    employee_id,
+
+                "zone_code":
+                    zone_code,
+
+                "authorization_status":
+                    (
+                        "AUTHORIZED"
+                        if authorized
+                        else "DENIED"
+                    ),
+
+                "reason":
+                    reason,
+            },
+        )
+
+    db.commit()
+
+    return get_security_employee(
+        db,
+        employee_id,
+    )        

@@ -1902,3 +1902,459 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
 .twin-viewport {
   align-self: start !important;
 }
+
+/* ==========================================================
+   SECURITY COMMAND CENTER — WORKFORCE ACCESS CONTROL
+   ========================================================== */
+
+.security-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.7rem 0;
+}
+
+.security-employee-select {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.security-employee-select > span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.security-employee-select select {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.55rem 0.7rem;
+  color: inherit;
+  background: #071725;
+  border: 1px solid rgba(104, 207, 255, 0.18);
+  border-radius: 8px;
+}
+
+.security-roster article {
+  cursor: pointer;
+}
+
+.security-roster article.selected {
+  border-color: #f3b64a;
+  background: rgba(243, 182, 74, 0.09);
+}
+
+.security-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(155px, 1fr)
+  );
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+.security-detail-grid article {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem;
+  background: rgba(3, 17, 29, 0.56);
+  border: 1px solid rgba(104, 207, 255, 0.13);
+  border-radius: 8px;
+}
+
+.security-detail-grid span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.security-detail-grid strong {
+  font-size: 0.85rem;
+}
+
+.security-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1rem 0 0.55rem;
+}
+
+.security-section-heading h3,
+.security-section-heading p {
+  margin: 0;
+}
+
+.security-zone-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(190px, 1fr)
+  );
+  gap: 0.55rem;
+}
+
+.security-zone-card {
+  padding: 0.7rem;
+  background: rgba(3, 17, 29, 0.58);
+  border: 1px solid rgba(104, 207, 255, 0.15);
+  border-radius: 8px;
+}
+
+.security-zone-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.security-zone-card h3 {
+  margin: 0.4rem 0 0.25rem;
+  font-size: 0.9rem;
+}
+
+.security-zone-card p {
+  margin: 0.2rem 0;
+  font-size: 0.75rem;
+}
+
+.security-zone-card small {
+  color: var(--muted);
+}
+
+.security-zone-card.authorized {
+  border-color: rgba(65, 220, 166, 0.48);
+}
+
+.security-zone-card.denied {
+  border-color: rgba(255, 91, 91, 0.52);
+}
+
+.security-zone-card.pending {
+  border-color: rgba(243, 182, 74, 0.48);
+}
+
+.security-training-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.security-training-list article {
+  padding: 0.65rem;
+  background: rgba(3, 17, 29, 0.58);
+  border: 1px solid rgba(104, 207, 255, 0.14);
+  border-radius: 8px;
+}
+
+.security-training-list article > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.security-training-list p {
+  margin: 0.3rem 0;
+  font-size: 0.75rem;
+}
+
+.security-training-list small {
+  color: var(--muted);
+}
+
+.security-training-list .authorized {
+  color: #62e6b5;
+}
+
+.security-training-list .denied {
+  color: #ff7777;
+}
+
+.security-training-list .pending {
+  color: #f3c264;
+}
+
+@media (max-width: 900px) {
+  .security-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .security-zone-grid,
+  .security-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .security-view-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ============================================================
+   PHARMA PARKING CAMPUS — SECURED + OVERFLOW
+   ============================================================ */
+
+.parking-campus-panel {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.85fr) minmax(420px, 1.55fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.parking-campus-lots {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.38fr);
+  gap: 1rem;
+  min-width: 0;
+  align-items: stretch;
+}
+
+
+/* ------------------------------------------------------------
+   Shared lot presentation
+   ------------------------------------------------------------ */
+
+.parking-campus-main-lot,
+.parking-campus-overflow-lot {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 205px;
+  padding: 2rem 1rem 1rem;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.parking-campus-lot-label {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.75rem;
+  z-index: 3;
+
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+
+/* ------------------------------------------------------------
+   SECURED 70-SPACE LOT
+   ------------------------------------------------------------ */
+
+.parking-campus-main-lot {
+  border: 1px solid rgba(71, 235, 180, 0.34);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(21, 52, 49, 0.52),
+      rgba(4, 24, 30, 0.78)
+    );
+}
+
+.parking-campus-main-lot .parking-campus-lot-label {
+  color: #55efb7;
+}
+
+.parking-campus-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-rows: repeat(7, 1fr);
+
+  gap: 0.28rem;
+  width: 100%;
+  height: 145px;
+  box-sizing: border-box;
+}
+
+.parking-campus-grid > i {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+
+  border: 1px solid rgba(122, 216, 230, 0.28);
+  border-radius: 2px;
+
+  background: rgba(7, 28, 34, 0.64);
+
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.parking-campus-grid > i.occupied {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(52, 229, 169, 0.92),
+      rgba(24, 164, 190, 0.78)
+    );
+
+  border-color: rgba(79, 242, 189, 0.95);
+
+  box-shadow:
+    0 0 8px rgba(62, 239, 184, 0.45);
+}
+
+
+/* ------------------------------------------------------------
+   OVERFLOW 30-SPACE LOT
+   ------------------------------------------------------------ */
+
+.parking-campus-overflow-lot {
+  border: 1px solid rgba(255, 179, 71, 0.46);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(65, 48, 25, 0.58),
+      rgba(31, 24, 17, 0.82)
+    );
+}
+
+.parking-campus-overflow-lot .parking-campus-lot-label {
+  color: #ffc46b;
+}
+
+.parking-campus-overflow-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(6, 1fr);
+
+  gap: 0.3rem;
+
+  width: 100%;
+  height: 145px;
+
+  box-sizing: border-box;
+}
+
+.parking-campus-overflow-grid > i {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+
+  border: 1px solid rgba(255, 181, 78, 0.38);
+  border-radius: 2px;
+
+  background: rgba(45, 31, 16, 0.72);
+}
+
+.parking-campus-overflow-grid > i.occupied {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 184, 74, 0.94),
+      rgba(219, 121, 36, 0.84)
+    );
+
+  border-color: rgba(255, 192, 95, 0.95);
+
+  box-shadow:
+    0 0 8px rgba(255, 170, 54, 0.48);
+}
+
+
+/* ------------------------------------------------------------
+   Gate
+   ------------------------------------------------------------ */
+
+.parking-campus-main-lot .parking-campus-gate {
+  position: absolute;
+  bottom: 0.38rem;
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 70px;
+  height: 13px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.parking-campus-main-lot .parking-campus-gate > i {
+  display: block;
+  width: 62px;
+  height: 6px;
+
+  border-radius: 2px;
+
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #f7f8f8 0 7px,
+      #e5b84f 7px 14px
+    );
+}
+
+
+/* ------------------------------------------------------------
+   Parking information / simulation state
+   ------------------------------------------------------------ */
+
+.parking-campus-panel-info {
+  min-width: 0;
+}
+
+.parking-campus-simulation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.65rem;
+
+  border: 1px solid rgba(71, 208, 255, 0.16);
+  border-radius: 8px;
+
+  background: rgba(3, 18, 28, 0.5);
+}
+
+.parking-campus-simulation span {
+  color: #64e9c1;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.parking-campus-simulation small {
+  color: #9db8c5;
+  white-space: nowrap;
+}
+
+
+/* ------------------------------------------------------------
+   Responsive protection
+   ------------------------------------------------------------ */
+
+@media (max-width: 1200px) {
+  .parking-campus-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .parking-campus-lots {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.42fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .parking-campus-lots {
+    grid-template-columns: 1fr;
+  }
+
+  .parking-campus-main-lot,
+  .parking-campus-overflow-lot {
+    min-height: 190px;
+  }
+
+  .parking-campus-overflow-grid {
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    grid-template-rows: repeat(3, 1fr);
+  }
+}

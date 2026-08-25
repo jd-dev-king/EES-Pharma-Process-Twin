@@ -1,4 +1,5 @@
 import { memo, useMemo } from "react";
+import type { ParkingStatus } from "../types";
 
 export type OverviewZone =
   | "office"
@@ -62,10 +63,7 @@ interface ProcessOverviewProps {
   orders: OverviewOrder[];
   assets: OverviewAsset[];
   events: OverviewEvent[];
-  parking: {
-    available: boolean; occupied_spaces: number; total_spaces: number; available_spaces: number;
-    employees: number; visitors: number; pending_reviews: number; denied_today: number;
-  } | null;
+  parking: ParkingStatus | null;
   onOpenSecurity: () => void;
   onNavigate: (zone: OverviewZone | "thread" | "analytics" | "alerts") => void;
 }
@@ -183,7 +181,7 @@ function ProcessOverviewComponent({ connected, kpis, orders, assets, events, par
         <div className="overview-animation-deck">
           <article className="overview-scene tanker-scene" onClick={() => onNavigate("bulk")}>
             <div className="scene-title"><span>Bulk Receiving</span><strong>{assets.filter((asset) => asset.zone === "bulk").length} tanks</strong></div>
-            <div className="tanker-visual"><div className="tanker-cab" /><div className="tanker-body"><span /></div><div className="tanker-wheel one"/><div className="tanker-wheel two"/></div>
+            <div className="tanker-visual"><div className="tanker-cab" /><div className="tanker-body"><span /></div><div className="tanker-wheel one" /><div className="tanker-wheel two" /></div>
             <div className="flow-pipe"><span /></div>
             <small>Tanker unloading and tank-farm inventory</small>
           </article>
@@ -194,7 +192,7 @@ function ProcessOverviewComponent({ connected, kpis, orders, assets, events, par
           </article>
           <article className="overview-scene conveyor-scene" onClick={() => onNavigate("packaging")}>
             <div className="scene-title"><span>Packaging</span><strong>{assets.filter((asset) => asset.zone === "packaging").length} lines</strong></div>
-            <div className="conveyor-belt"><span/><span/><span/><span/><span/></div>
+            <div className="conveyor-belt"><span /><span /><span /><span /><span /></div>
             <div className="conveyor-base" />
             <small>Automatic filling, inspection, jams, and finished goods</small>
           </article>
@@ -261,14 +259,93 @@ function ProcessOverviewComponent({ connected, kpis, orders, assets, events, par
         </section>
       </div>
 
-      <section className={`overview-security-strip ${parking?.available ? "online" : "offline"}`}>
-        <div><p className="eyebrow">Facility Security</p><h2>Security Command Center</h2><small>Pharma employee parking & access oversight</small></div>
-        <article><span>Parking</span><strong>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces}` : "OFFLINE"}</strong><small>{parking?.available ? `${parking.available_spaces} free` : "Independent twin unavailable"}</small></article>
-        <article><span>Employees</span><strong>{parking?.employees ?? 0}</strong><small>Currently on site</small></article>
-        <article><span>Visitors</span><strong>{parking?.visitors ?? 0}</strong><small>Currently on site</small></article>
-        <article><span>Pending Reviews</span><strong>{parking?.pending_reviews ?? 0}</strong><small>Security action required</small></article>
-        <article><span>Denied Today</span><strong>{parking?.denied_today ?? 0}</strong><small>Access exceptions</small></article>
-        <button className="button primary" onClick={onOpenSecurity}>Open Security Command Center</button>
+      <section
+        className={`overview-security-strip ${parking?.available ? "online" : "offline"}`}
+      >
+        <div>
+          <p className="eyebrow">Facility Security</p>
+          <h2>Security Command Center</h2>
+          <small>Pharma secured parking & overflow access oversight</small>
+        </div>
+
+        <article>
+          <span>Secured Lot</span>
+          <strong>
+            {parking?.available
+              ? `${parking.secured_occupied_spaces}/${parking.secured_total_spaces}`
+              : "OFFLINE"}
+          </strong>
+          <small>
+            {parking?.available
+              ? `${parking.secured_available_spaces} free`
+              : "Parking twin unavailable"}
+          </small>
+        </article>
+
+        <article>
+          <span>Overflow</span>
+          <strong>
+            {parking?.available
+              ? `${parking.overflow_occupied_spaces}/${parking.overflow_total_spaces}`
+              : "—/30"}
+          </strong>
+          <small>
+            {parking?.available
+              ? `${parking.overflow_available_spaces} free`
+              : "Secured overflow"}
+          </small>
+        </article>
+
+        <article>
+          <span>Total Parked</span>
+          <strong>
+            {parking?.available
+              ? `${parking.total_parked}/${parking.total_parking_capacity}`
+              : "—/100"}
+          </strong>
+          <small>Secured + overflow</small>
+        </article>
+
+        <article>
+          <span>Employees</span>
+          <strong>{parking?.employees ?? 0}</strong>
+          <small>Currently on site</small>
+        </article>
+
+        <article>
+          <span>Contractors</span>
+          <strong>{parking?.contractors ?? 0}</strong>
+          <small>Currently on site</small>
+        </article>
+
+        <article>
+          <span>Visitors</span>
+          <strong>{parking?.visitors ?? 0}</strong>
+          <small>Currently on site</small>
+        </article>
+
+        <article>
+          <span>Auto Run</span>
+          <strong>
+            {parking?.auto_run_active
+              ? "ACTIVE"
+              : parking?.auto_run_phase === "COMPLETE"
+                ? "COMPLETE"
+                : "IDLE"}
+          </strong>
+          <small>
+            {parking?.sim_day && parking?.sim_time
+              ? `${parking.sim_day} ${parking.sim_time}`
+              : parking?.auto_run_phase ?? "Waiting"}
+          </small>
+        </article>
+
+        <button
+          className="button primary"
+          onClick={onOpenSecurity}
+        >
+          Open Security Command Center
+        </button>
       </section>
 
       <section className="overview-automation-strip" onClick={() => onNavigate("automation")}>

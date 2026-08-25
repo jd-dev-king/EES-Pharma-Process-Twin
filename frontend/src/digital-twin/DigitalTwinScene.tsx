@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 
 import { ScadaOverlay } from "./ScadaOverlay";
+import type { ParkingStatus } from "../types";
 
 export type TwinZone =
   | "office"
@@ -23,18 +24,6 @@ export interface TwinAsset {
   status: string;
   poNumber?: string | null;
   level?: number;
-}
-
-interface ParkingStatus {
-  available: boolean;
-  lot_code: string;
-  lot_name: string;
-  total_spaces: number;
-  occupied_spaces: number;
-  available_spaces: number;
-  employees: number;
-  visitors: number;
-  occupancy_percent: number;
 }
 
 interface DigitalTwinSceneProps {
@@ -185,44 +174,140 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
 
           </div>
 
-          <section className={`parking-campus-panel ${parking?.available ? "online" : "offline"}`} aria-label="Pharma employee parking campus">
+          <section
+            className={`parking-campus-panel ${parking?.available ? "online" : "offline"}`}
+            aria-label="Pharma employee parking campus"
+          >
             <div className="parking-campus-panel-info">
-              <span className="parking-campus-panel-kicker">CAMPUS ACCESS</span>
+              <span className="parking-campus-panel-kicker">
+                CAMPUS ACCESS
+              </span>
+
               <h3>PHARMA EMPLOYEE PARKING</h3>
+
               <strong className="parking-campus-panel-status">
-                {parking?.available ? `${parking.occupied_spaces} / ${parking.total_spaces} occupied` : "Parking Twin Offline"}
+                {parking?.available
+                  ? `${parking.total_parked} / ${parking.total_parking_capacity} parked`
+                  : "Parking Twin Offline"}
               </strong>
+
               <small>
                 {parking?.available
-                  ? `${parking.employees} employees · ${parking.visitors} visitors · ${parking.available_spaces} spaces free`
+                  ? `${parking.employees} employees · ${parking.contractors} contractors · ${parking.visitors} visitors`
                   : "Open dedicated parking digital twin"}
               </small>
 
               <div className="parking-campus-metrics">
-                <article><b>{parking?.available ? `${parking.occupied_spaces}/${parking.total_spaces}` : "—/70"}</b><span>Occupied</span></article>
-                <article><b>{parking?.available ? parking.employees : "—"}</b><span>Employees</span></article>
-                <article><b>{parking?.available ? parking.visitors : "—"}</b><span>Visitors</span></article>
-                <article><b>{parking?.available ? parking.available_spaces : "—"}</b><span>Spaces Free</span></article>
+                <article>
+                  <b>
+                    {parking?.available
+                      ? `${parking.secured_occupied_spaces}/${parking.secured_total_spaces}`
+                      : "—/70"}
+                  </b>
+                  <span>Secured</span>
+                </article>
+
+                <article>
+                  <b>
+                    {parking?.available
+                      ? `${parking.overflow_occupied_spaces}/${parking.overflow_total_spaces}`
+                      : "—/30"}
+                  </b>
+                  <span>Overflow</span>
+                </article>
+
+                <article>
+                  <b>{parking?.available ? parking.employees : "—"}</b>
+                  <span>Employees</span>
+                </article>
+
+                <article>
+                  <b>{parking?.available ? parking.contractors : "—"}</b>
+                  <span>Contractors</span>
+                </article>
               </div>
 
-              <button className="button secondary parking-campus-open" onClick={onOpenParking}>Open Parking Digital Twin</button>
+              {parking?.available && (
+                <div className="parking-campus-simulation">
+                  <span>
+                    {parking.auto_run_active
+                      ? "AUTO RUN ACTIVE"
+                      : parking.auto_run_phase === "COMPLETE"
+                        ? "AUTO RUN COMPLETE"
+                        : "PARKING READY"}
+                  </span>
+
+                  <small>
+                    {parking.sim_day && parking.sim_time
+                      ? `${parking.sim_day} · ${parking.sim_time}`
+                      : parking.auto_run_phase}
+                  </small>
+                </div>
+              )}
+
+              <button
+                className="button secondary parking-campus-open"
+                onClick={onOpenParking}
+              >
+                Open Parking Digital Twin
+              </button>
             </div>
 
-            <button
-              className="parking-campus-lot"
-              onClick={onOpenParking}
-              aria-label="Open Pharma Employee Parking Digital Twin"
-            >
-              <span className="parking-campus-grid">
-                {Array.from({ length: 70 }).map((_, index) => (
-                  <i
-                    key={index}
-                    className={parking?.available && index < Math.min(70, parking.occupied_spaces) ? "occupied" : ""}
-                  />
-                ))}
-              </span>
-              <span className="parking-campus-gate"><i /></span>
-            </button>
+            <div className="parking-campus-lots">
+
+              <button
+                className="parking-campus-lot parking-campus-main-lot"
+                onClick={onOpenParking}
+                aria-label="Open Pharma Employee Parking Digital Twin"
+              >
+                <span className="parking-campus-lot-label">
+                  SECURED · 70
+                </span>
+
+                <span className="parking-campus-grid">
+                  {Array.from({ length: 70 }).map((_, index) => (
+                    <i
+                      key={index}
+                      className={
+                        parking?.available &&
+                          index < Math.min(70, parking.secured_occupied_spaces)
+                          ? "occupied"
+                          : ""
+                      }
+                    />
+                  ))}
+                </span>
+
+                <span className="parking-campus-gate">
+                  <i />
+                </span>
+              </button>
+
+              <button
+                className="parking-campus-overflow-lot"
+                onClick={onOpenParking}
+                aria-label="Open secured overflow parking"
+              >
+                <span className="parking-campus-lot-label">
+                  OVERFLOW · 30
+                </span>
+
+                <span className="parking-campus-overflow-grid">
+                  {Array.from({ length: 30 }).map((_, index) => (
+                    <i
+                      key={index}
+                      className={
+                        parking?.available &&
+                          index < Math.min(30, parking.overflow_occupied_spaces)
+                          ? "occupied"
+                          : ""
+                      }
+                    />
+                  ))}
+                </span>
+              </button>
+
+            </div>
           </section>
         </div>
 

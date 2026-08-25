@@ -76,6 +76,115 @@ export const api={
  health:()=>request<T.HealthResponse>("/health"),
  parkingStatus:()=>request<T.ParkingStatus>("/facility/parking-status"),
  securityStatus:()=>request<T.SecurityStatus>("/facility/security-status"),
+ getSecuritySummary: () =>
+  request<T.SecuritySummary>("/security/summary"),
+
+ getSecurityEmployees: () =>
+  request<T.SecurityEmployeeListResponse>("/security/employees"),
+
+ getSecurityEmployee: (employeeId: number) =>
+  request<T.SecurityEmployeeDetail>(`/security/employees/${employeeId}`),
+
+ reevaluateSecurityEmployee: (employeeId: number) =>
+  request<T.SecurityEmployeeDetail>(
+   `/security/employees/${employeeId}/reevaluate`,
+   { method: "POST" },
+  ),
+ workforceEmployees: async () =>
+  request<{
+    employees: Array<{
+      employee_id: number;
+      site_code: string;
+      employee_number: string;
+      display_name: string;
+      first_name: string;
+      last_name: string;
+      employment_type: string;
+      employment_status: string;
+      commute_mode: string;
+      department_code: string | null;
+      department_name: string | null;
+      role_id: number | null;
+      role_code: string | null;
+      role_name: string | null;
+      role_level: string | null;
+      shift_id: number | null;
+      shift_code: string | null;
+      shift_name: string | null;
+      schedule_family: string | null;
+      start_time: string | null;
+      end_time: string | null;
+      crosses_midnight: boolean | null;
+      operating_days: number[];
+      on_call: boolean | null;
+    }>;
+  }>("/workforce/employees"),
+
+workforceSummary: async () =>
+  request<{
+    total: number;
+    active: number;
+    on_leave: number;
+    inactive: number;
+    permanent: number;
+    temporary: number;
+    departments: Array<{
+      department_name: string;
+      headcount: number;
+      active: number;
+      temporary: number;
+    }>;
+  }>("/workforce/summary"),
+
+workforceTraining: async () =>
+  request<{
+    training: Array<{
+      employee_id: number;
+      employee_number: string;
+      display_name: string;
+      department_name: string | null;
+      employment_type: string;
+      employment_status: string;
+      role_code: string | null;
+      role_name: string | null;
+      course_id: number;
+      course_code: string;
+      course_name: string;
+      training_category: string;
+      gmp_relevant: boolean;
+      required_for_site_access: boolean;
+      validity_days: number | null;
+      effective_status: string;
+      recorded_status: string | null;
+      assigned_at: string | null;
+      completed_at: string | null;
+      expires_at: string | null;
+      completion_score: number | null;
+    }>;
+  }>("/workforce/training"),
+
+workforceCoverage: async () =>
+  request<{
+    employees: Array<{
+      employee_id: number;
+      employee_number: string;
+      display_name: string;
+      department_name: string | null;
+      employment_type: string;
+      employment_status: string;
+      role_code: string | null;
+      role_name: string | null;
+      required_courses: number;
+      current_courses: number;
+      readiness: number;
+    }>;
+    departments: Array<{
+      department_name: string;
+      employees: number;
+      active_employees: number;
+      readiness: number;
+    }>;
+  }>("/workforce/coverage"),
  trainingRoles:async()=> (await request<{roles:string[]}>("/training/roles")).roles,
  startTrainingSession:(role:string,difficulty:string)=>request<T.TrainingSession>("/training/session",{method:"POST",body:JSON.stringify({role,difficulty})}),
  advanceTrainingSession:(sessionId:string,correct=true,note="")=>request<T.TrainingSession>(`/training/session/${sessionId}/advance`,{method:"POST",body:JSON.stringify({correct,note})}),

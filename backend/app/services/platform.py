@@ -68,68 +68,255 @@ def _remote_parking_json(paths: list[str]):
     return None
 
 
-def _normalize_parking_summary(data: dict | None):
-    if not data:
+def _normalize_parking_summary(source):
+    if not source or not isinstance(source, dict):
         return None
-    source = data.get("parking") if isinstance(data.get("parking"), dict) else data
-    total = source.get("total_spaces", source.get("capacity", source.get("total", 0)))
-    occupied = source.get("occupied_spaces", source.get("occupied", source.get("active_sessions", 0)))
-    employees = source.get("employees", source.get("employee_count", source.get("employees_parked", 0)))
-    visitors = source.get("visitors", source.get("visitor_count", source.get("visitors_parked", 0)))
+
     try:
-        total, occupied, employees, visitors = int(total or 0), int(occupied or 0), int(employees or 0), int(visitors or 0)
+        # Dedicated Parking Access API uses capacity/occupied/remaining.
+        # Pharma Process historically used total_spaces/occupied_spaces/etc.
+        secured_total = int(
+            source.get(
+                "secured_total_spaces",
+                source.get("total_spaces", source.get("capacity", 0)),
+            )
+            or 0
+        )
+
+        secured_occupied = int(
+            source.get(
+                "secured_occupied_spaces",
+                source.get("occupied_spaces", source.get("occupied", 0)),
+            )
+            or 0
+        )
+
+        employees = int(source.get("employees", 0) or 0)
+        visitors = int(source.get("visitors", 0) or 0)
+        contractors = int(source.get("contractors", source.get("contractors_on_site", 0)) or 0)
+
+        overflow_total = int(
+            source.get(
+                "overflow_total_spaces",
+                source.get("overflow_capacity", 30),
+            )
+            or 30
+        )
+
+        overflow_occupied = int(
+            source.get(
+                "overflow_occupied_spaces",
+                source.get("overflow_occupied", source.get("overflow", 0)),
+            )
+            or 0
+        )
+
     except (TypeError, ValueError):
         return None
-    if total <= 0:
+
+    if secured_total <= 0:
         return None
+
+    secured_available = max(0, secured_total - secured_occupied)
+    overflow_available = max(0, overflow_total - overflow_occupied)
+
+    total_capacity = secured_total + overflow_total
+    total_occupied = secured_occupied + overflow_occupied
+    total_available = max(0, total_capacity - total_occupied)
+
     return {
         "available": True,
+
         "lot_code": str(source.get("lot_code", "PHARMA-EMPLOYEE")),
         "lot_name": str(source.get("lot_name", "Pharma Employee Parking")),
-        "total_spaces": total,
-        "occupied_spaces": occupied,
-        "available_spaces": max(0, total - occupied),
+
+        # Legacy secured-lot contract retained for existing UI consumers.
+        "total_spaces": secured_total,
+        "occupied_spaces": secured_occupied,
+        "available_spaces": secured_available,
+        "occupancy_percent": round(
+            (secured_occupied / secured_total * 100)
+            if secured_total
+            else 0,
+            1,
+        ),
+
+        # Explicit secured-lot contract.
+        "secured_total_spaces": secured_total,
+        "secured_occupied_spaces": secured_occupied,
+        "secured_available_spaces": secured_available,
+
+        # Overflow lot.
+        "overflow_total_spaces": overflow_total,
+        "overflow_occupied_spaces": overflow_occupied,
+        "overflow_available_spaces": overflow_available,
+
+        # Entire parking operation.
+        "total_parking_capacity": total_capacity,
+        "total_parked": total_occupied,
+        "total_available_spaces": total_available,
+
+        # Occupants.
         "employees": employees,
+        "contractors": contractors,
         "visitors": visitors,
-        "occupancy_percent": round((occupied / total * 100) if total else 0, 1),
+
+        # Auto-run operational state.
+        "auto_run_active": bool(
+            source.get("auto_run_active", source.get("active", False))
+        ),
+        "auto_run_phase": str(
+            source.get("auto_run_phase", source.get("phase", "IDLE")) or "IDLE"
+        ),
+        "sim_day": str(source.get("sim_day", "") or ""),
+        "sim_time": str(source.get("sim_time", "") or ""),
+        "current_event": str(source.get("current_event", "") or ""),
+        "next_event": str(source.get("next_event", "") or ""),
+
+        # Preserve session information if Parking Access supplies it.
+        "active_sessions": source.get("active_sessions", []) or [],
+        "overflow_sessions": source.get("overflow_sessions", []) or [],
+        "overflow_vehicles": source.get("overflow_vehicles", []) or [],
     }
 
 
 def facility_parking_status(db: Session):
-    """Parking Access is a separate digital twin; prefer its production API, then DB fallback."""
+    """
+    Parking Access is the authoritative parking digital twin.
+
+    Prefer its API. PostgreSQL is read-only fallback for the secured lot.
+    """
+
     remote = _remote_parking_json([
         "/api/facility/parking-status",
         "/api/parking/status",
         "/api/v1/parking/status",
         "/api/status",
     ])
+
     normalized = _normalize_parking_summary(remote)
+
     if normalized:
         return normalized
+
     try:
         summary = db.execute(text("""
             SELECT
-                COUNT(*) FILTER (WHERE ps.session_status = 'ACTIVE') AS occupied,
-                COUNT(*) FILTER (WHERE ps.session_status = 'ACTIVE' AND ps.occupant_type = 'EMPLOYEE') AS employees,
-                COUNT(*) FILTER (WHERE ps.session_status = 'ACTIVE' AND ps.occupant_type = 'VISITOR') AS visitors
+                COUNT(*) FILTER (
+                    WHERE ps.session_status = 'ACTIVE'
+                ) AS occupied,
+
+                COUNT(*) FILTER (
+                    WHERE ps.session_status = 'ACTIVE'
+                      AND ps.occupant_type = 'EMPLOYEE'
+                ) AS employees,
+
+                COUNT(*) FILTER (
+                    WHERE ps.session_status = 'ACTIVE'
+                      AND ps.occupant_type = 'VISITOR'
+                ) AS visitors
+
             FROM parking_access.parking_sessions ps
         """)).mappings().one()
-        total = int(db.execute(text("SELECT COUNT(*) FROM parking_access.parking_spaces")).scalar_one() or 0)
-        occupied = int(summary['occupied'] or 0)
+
+        total = int(
+            db.execute(
+                text("SELECT COUNT(*) FROM parking_access.parking_spaces")
+            ).scalar_one()
+            or 0
+        )
+
+        occupied = int(summary["occupied"] or 0)
+        employees = int(summary["employees"] or 0)
+        visitors = int(summary["visitors"] or 0)
+
         return {
-            "available": True, "lot_code": "PHARMA-EMPLOYEE", "lot_name": "Pharma Employee Parking",
-            "total_spaces": total, "occupied_spaces": occupied, "available_spaces": max(0, total - occupied),
-            "employees": int(summary['employees'] or 0), "visitors": int(summary['visitors'] or 0),
-            "occupancy_percent": round((occupied / total * 100) if total else 0, 1),
-        }
-    except Exception:
-        db.rollback()
-        return {
-            "available": False, "lot_code": "PHARMA-EMPLOYEE", "lot_name": "Pharma Employee Parking",
-            "total_spaces": 70, "occupied_spaces": 0, "available_spaces": 70,
-            "employees": 0, "visitors": 0, "occupancy_percent": 0.0,
+            "available": True,
+
+            "lot_code": "PHARMA-EMPLOYEE",
+            "lot_name": "Pharma Employee Parking",
+
+            # Legacy secured-lot fields.
+            "total_spaces": total,
+            "occupied_spaces": occupied,
+            "available_spaces": max(0, total - occupied),
+            "occupancy_percent": round(
+                (occupied / total * 100) if total else 0,
+                1,
+            ),
+
+            # Explicit secured lot.
+            "secured_total_spaces": total,
+            "secured_occupied_spaces": occupied,
+            "secured_available_spaces": max(0, total - occupied),
+
+            # Overflow cannot be reconstructed reliably from this
+            # legacy DB fallback, so do not invent occupancy.
+            "overflow_total_spaces": 30,
+            "overflow_occupied_spaces": 0,
+            "overflow_available_spaces": 30,
+
+            "total_parking_capacity": total + 30,
+            "total_parked": occupied,
+            "total_available_spaces": max(0, total - occupied) + 30,
+
+            "employees": employees,
+            "contractors": 0,
+            "visitors": visitors,
+
+            "auto_run_active": False,
+            "auto_run_phase": "UNAVAILABLE",
+            "sim_day": "",
+            "sim_time": "",
+            "current_event": "",
+            "next_event": "",
+
+            "active_sessions": [],
+            "overflow_sessions": [],
+            "overflow_vehicles": [],
         }
 
+    except Exception:
+        db.rollback()
+
+        return {
+            "available": False,
+
+            "lot_code": "PHARMA-EMPLOYEE",
+            "lot_name": "Pharma Employee Parking",
+
+            "total_spaces": 70,
+            "occupied_spaces": 0,
+            "available_spaces": 70,
+            "occupancy_percent": 0.0,
+
+            "secured_total_spaces": 70,
+            "secured_occupied_spaces": 0,
+            "secured_available_spaces": 70,
+
+            "overflow_total_spaces": 30,
+            "overflow_occupied_spaces": 0,
+            "overflow_available_spaces": 30,
+
+            "total_parking_capacity": 100,
+            "total_parked": 0,
+            "total_available_spaces": 100,
+
+            "employees": 0,
+            "contractors": 0,
+            "visitors": 0,
+
+            "auto_run_active": False,
+            "auto_run_phase": "OFFLINE",
+            "sim_day": "",
+            "sim_time": "",
+            "current_event": "",
+            "next_event": "",
+
+            "active_sessions": [],
+            "overflow_sessions": [],
+            "overflow_vehicles": [],
+        }
 
 def facility_security_status(db: Session):
     """Read-only Security Command Center. Prefer the dedicated Parking Access API."""

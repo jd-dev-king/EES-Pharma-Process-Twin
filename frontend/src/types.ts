@@ -59,12 +59,43 @@ export interface ParkingStatus {
   available: boolean;
   lot_code: string;
   lot_name: string;
+
+  // Main secured 70-space lot
   total_spaces: number;
   occupied_spaces: number;
   available_spaces: number;
-  employees: number;
-  visitors: number;
   occupancy_percent: number;
+
+  secured_total_spaces: number;
+  secured_occupied_spaces: number;
+  secured_available_spaces: number;
+
+  // 30-space secured overflow lot
+  overflow_total_spaces: number;
+  overflow_occupied_spaces: number;
+  overflow_available_spaces: number;
+
+  // Combined parking operation
+  total_parking_capacity: number;
+  total_parked: number;
+  total_available_spaces: number;
+
+  // Occupants
+  employees: number;
+  contractors: number;
+  visitors: number;
+
+  // Accelerated simulation
+  auto_run_active: boolean;
+  auto_run_phase: string;
+  sim_day: string;
+  sim_time: string;
+  current_event: string;
+  next_event: string;
+
+  active_sessions: unknown[];
+  overflow_sessions: unknown[];
+  overflow_vehicles: string[];
 }
 export interface SecurityOccupant {
   vehicle_identifier: string;
@@ -89,6 +120,124 @@ export interface SecurityStatus extends ParkingStatus {
   visitor_ids_available: number;
   active_occupants: SecurityOccupant[];
   recent_events: SecurityEvent[];
+}
+
+// ============================================================
+// Security Workforce / Controlled-Zone Access
+// ============================================================
+
+export interface SecurityEmployee {
+  employee_id: number;
+  employee_number: string;
+  display_name: string;
+
+  employment_type: string;
+  employment_status: string;
+
+  department_code: string | null;
+  department_name: string | null;
+
+  role_code: string | null;
+  role_name: string | null;
+
+  shift_code: string | null;
+  shift_name: string | null;
+
+  start_time: string | null;
+  end_time: string | null;
+
+  authorized_zones: number;
+  denied_zones: number;
+}
+
+export interface SecuritySummary {
+  active_employees: number;
+  on_leave: number;
+  inactive: number;
+
+  controlled_authorized: number;
+  controlled_denied: number;
+}
+
+export interface SecurityTrainingRecord {
+  course_id: number;
+  course_code: string;
+  course_name: string;
+  training_category: string | null;
+  gmp_relevant: boolean;
+
+  effective_status: string;
+
+  completed_at: string | null;
+  expires_at: string | null;
+}
+
+export interface SecurityQualification {
+  qualification_id: number;
+  qualification_code: string;
+  qualification_name: string;
+
+  qualification_status: string | null;
+  qualification_basis: string | null;
+
+  qualified_at: string | null;
+  expires_at: string | null;
+
+  notes: string | null;
+
+  required: boolean;
+  role_requirement_active: boolean;
+}
+
+export interface SecurityZoneAuthorization {
+  zone_id: number;
+  zone_code: string;
+  zone_name: string;
+
+  security_level: number;
+  gmp_controlled: boolean;
+
+  authorization_status: string;
+  authorization_source: string;
+
+  reason: string | null;
+  last_evaluated_at: string | null;
+}
+
+export interface SecurityEmployeeDetail {
+  employee: {
+    employee_id: number;
+    employee_number: string;
+    display_name: string;
+
+    employment_type: string;
+    employment_status: string;
+
+    commute_mode: string | null;
+
+    department_code: string | null;
+    department_name: string | null;
+
+    role_code: string | null;
+    role_name: string | null;
+    role_level: string | null;
+
+    shift_code: string | null;
+    shift_name: string | null;
+
+    start_time: string | null;
+    end_time: string | null;
+
+    on_call: boolean | null;
+  };
+
+  training: SecurityTrainingRecord[];
+  qualifications: SecurityQualification[];
+  zones: SecurityZoneAuthorization[];
+}
+
+export interface SecurityEmployeeListResponse {
+  employees: SecurityEmployee[];
 }
 
 

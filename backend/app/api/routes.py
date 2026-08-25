@@ -5,6 +5,26 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.schemas.platform import *
 from app.services.platform import *
+
+from app.services.ees_data_platform import (
+    list_workforce_employees,
+    get_workforce_summary,
+    list_workforce_training,
+    get_workforce_coverage,
+)
+
+from app.services.ees_data_platform import (
+    list_workforce_employees,
+    get_workforce_summary,
+    list_workforce_training,
+    get_workforce_coverage,
+
+    list_security_employees,
+    get_security_employee,
+    get_security_summary,
+    reevaluate_security_employee,
+)
+
 router=APIRouter(); settings=get_settings()
 
 def demo_session_id(request: Request) -> str:
@@ -655,3 +675,188 @@ def demo_reset(
         payload.operator,
         payload.reason,
     )
+    
+# ============================================================
+# WORKFORCE
+# Authoritative reads from ees_data_platform
+# ============================================================
+
+
+@router.get(
+    "/workforce/employees",
+    tags=["Workforce"],
+)
+def workforce_employees(
+    db: Session = Depends(get_db),
+):
+    try:
+        return {
+            "employees":
+                list_workforce_employees(db)
+        }
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workforce read failed: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/workforce/summary",
+    tags=["Workforce"],
+)
+def workforce_summary(
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_workforce_summary(db)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workforce summary failed: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/workforce/training",
+    tags=["Workforce"],
+)
+def workforce_training(
+    db: Session = Depends(get_db),
+):
+    try:
+        return {
+            "training":
+                list_workforce_training(db)
+        }
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workforce training read failed: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/workforce/coverage",
+    tags=["Workforce"],
+)
+def workforce_coverage(
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_workforce_coverage(db)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workforce coverage failed: {exc}",
+        ) from exc  
+        
+# ============================================================
+# SECURITY
+# Workforce qualification / badge authorization
+# ============================================================
+
+
+@router.get(
+    "/security/employees",
+    tags=["Security"],
+)
+def security_employees(
+    db: Session = Depends(get_db),
+):
+    try:
+        return {
+            "employees":
+                list_security_employees(db)
+        }
+
+    except Exception as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Security workforce read failed: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/security/summary",
+    tags=["Security"],
+)
+def security_summary(
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_security_summary(db)
+
+    except Exception as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Security summary failed: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/security/employees/{employee_id}",
+    tags=["Security"],
+)
+def security_employee(
+    employee_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_security_employee(
+            db,
+            employee_id,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Security employee read failed: {exc}",
+        ) from exc
+
+
+@router.post(
+    "/security/employees/{employee_id}/reevaluate",
+    tags=["Security"],
+)
+def security_employee_reevaluate(
+    employee_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return reevaluate_security_employee(
+            db,
+            employee_id,
+        )
+
+    except ValueError as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Security re-evaluation failed: {exc}",
+        ) from exc          
