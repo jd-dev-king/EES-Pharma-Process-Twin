@@ -267,7 +267,7 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
           </div>
 
           <section
-            className={`parking-campus-panel ${parking?.available ? "online" : "offline"}`}
+            className={`parking-campus-panel parking-campus-panel-v203 ${parking?.available ? "online" : "offline"}`}
             aria-label="Pharma employee parking campus"
           >
             <div className="parking-campus-panel-info">
@@ -329,9 +329,13 @@ function DigitalTwinSceneComponent({ connected, assets, alarms, activeOrders, pa
                   </span>
 
                   <small>
-                    {parking.sim_day && parking.sim_time
+                    {String(parking.auto_run_phase ?? "IDLE").toUpperCase() !== "IDLE" &&
+                    parking.sim_day &&
+                    parking.sim_time
                       ? `${parking.sim_day} · ${parking.sim_time}`
-                      : String(parking.auto_run_phase ?? "IDLE").replaceAll("_", " ")}
+                      : String(parking.auto_run_phase ?? "IDLE").toUpperCase() === "IDLE"
+                        ? "WAITING FOR PARKING RUN"
+                        : String(parking.auto_run_phase ?? "IDLE").replaceAll("_", " ")}
                   </small>
                 </div>
               )}

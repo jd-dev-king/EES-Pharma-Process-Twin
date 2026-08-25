@@ -2540,3 +2540,440 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px
   white-space: nowrap;
   font-size: clamp(0.68rem, 0.75vw, 0.85rem);
 }
+
+/* ============================================================
+   EES Pharma Process v2.0.3 — Parking Layout Hotfix R2
+   APPEND AFTER all previous parking hotfix CSS.
+   ============================================================ */
+
+.twin-viewport {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.twin-scene {
+  padding-bottom: clamp(40px, 3vw, 56px) !important;
+  margin-bottom: 0 !important;
+}
+
+.parking-campus-panel.parking-campus-panel-v203 {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  translate: none !important;
+  transform: none !important;
+
+  display: grid !important;
+  grid-template-columns:
+    minmax(190px, 0.68fr)
+    minmax(0, 1.62fr) !important;
+
+  gap: clamp(12px, 1vw, 18px) !important;
+
+  width: calc(100% - 32px) !important;
+  max-width: calc(100% - 32px) !important;
+  min-width: 0 !important;
+
+  margin: clamp(86px, 7vw, 118px) 16px 24px !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  z-index: 2 !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-panel-info {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-panel-info h3,
+.parking-campus-panel-v203 .parking-campus-panel-status,
+.parking-campus-panel-v203 .parking-campus-panel-info > small {
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-simulation {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  min-height: 52px !important;
+
+  padding: 8px 10px !important;
+  gap: 4px !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-simulation span,
+.parking-campus-panel-v203 .parking-campus-simulation small {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  text-align: left !important;
+  line-height: 1.15 !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-simulation span {
+  font-size: clamp(.64rem, .70vw, .76rem) !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-simulation small {
+  font-size: clamp(.55rem, .60vw, .66rem) !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-lots {
+  display: grid !important;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(128px, .34fr) !important;
+
+  gap: clamp(10px, .9vw, 15px) !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  align-items: stretch !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-main-lot,
+.parking-campus-panel-v203 .parking-campus-overflow-lot {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-grid {
+  display: grid !important;
+  grid-template-columns: repeat(10, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(7, minmax(0, 1fr)) !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  gap: clamp(2px, .2vw, 4px) !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-grid > i {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-overflow-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(6, minmax(0, 1fr)) !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  gap: 3px !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-overflow-grid > i {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.parking-campus-panel-v203
+.parking-campus-overflow-lot
+.parking-campus-lot-label {
+  position: absolute !important;
+
+  top: 10px !important;
+  left: 5px !important;
+  right: 5px !important;
+
+  width: auto !important;
+  max-width: calc(100% - 10px) !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+
+  font-size: clamp(.50rem, .54vw, .61rem) !important;
+  letter-spacing: .015em !important;
+  line-height: 1 !important;
+  text-align: center !important;
+}
+
+.parking-campus-panel-v203
+.parking-campus-main-lot
+.parking-campus-lot-label {
+  top: 10px !important;
+  left: 10px !important;
+  right: 10px !important;
+  white-space: nowrap !important;
+  font-size: clamp(.60rem, .65vw, .72rem) !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-metrics {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+.parking-campus-panel-v203 .parking-campus-metrics article {
+  min-width: 0 !important;
+}
+
+@media (max-width: 1500px) {
+  .parking-campus-panel.parking-campus-panel-v203 {
+    grid-template-columns:
+      minmax(180px, .65fr)
+      minmax(0, 1.65fr) !important;
+  }
+
+  .parking-campus-panel-v203 .parking-campus-lots {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(124px, .35fr) !important;
+  }
+}
+
+@media (max-width: 1220px) {
+  .parking-campus-panel.parking-campus-panel-v203 {
+    grid-template-columns:
+      minmax(170px, .61fr)
+      minmax(0, 1.69fr) !important;
+
+    margin-top: 96px !important;
+  }
+
+  .parking-campus-panel-v203 .parking-campus-lots {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(120px, .37fr) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .parking-campus-panel.parking-campus-panel-v203 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .parking-campus-panel-v203 .parking-campus-lots {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(120px, .35fr) !important;
+  }
+}
+
+@media (max-width: 650px) {
+  .parking-campus-panel-v203 .parking-campus-lots {
+    grid-template-columns: 1fr !important;
+  }
+
+  .parking-campus-panel-v203 .parking-campus-overflow-grid {
+    grid-template-columns: repeat(10, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ============================================================
+   v2.0.3 — SCADA STATUS CONTAINMENT HOTFIX
+   Prevent long equipment/CIP states from escaping the SCADA card
+   ============================================================ */
+
+.twin-hud,
+.twin-hud > *,
+.scada-overlay,
+.scada-overlay > *,
+.scada-faceplate,
+.scada-faceplate > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+
+/* ------------------------------------------------------------
+   SCADA heading / status row
+   ------------------------------------------------------------ */
+
+.scada-overlay header,
+.scada-faceplate header,
+.scada-overlay-heading,
+.scada-faceplate-heading,
+.twin-scada-heading {
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(90px, 0.45fr) !important;
+
+  gap: 10px !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  align-items: start !important;
+
+  box-sizing: border-box !important;
+}
+
+
+/* ------------------------------------------------------------
+   SCADA state / CIP status pill
+   ------------------------------------------------------------ */
+
+.scada-status,
+.scada-state,
+.scada-status-pill,
+.scada-state-pill,
+.twin-scada-status,
+.twin-scada-state {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  box-sizing: border-box !important;
+
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+
+  text-align: center !important;
+
+  font-size: clamp(
+    0.52rem,
+    0.58vw,
+    0.66rem
+  ) !important;
+
+  line-height: 1.1 !important;
+
+  padding:
+    7px
+    8px !important;
+}
+
+
+/* ------------------------------------------------------------
+   Defensive containment for status text nested in spans
+   ------------------------------------------------------------ */
+
+.scada-status span,
+.scada-state span,
+.scada-status-pill span,
+.scada-state-pill span,
+.twin-scada-status span,
+.twin-scada-state span {
+  display: block !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+
+  line-height: 1.1 !important;
+}
+
+
+/* ------------------------------------------------------------
+   Asset title also gets protected
+   ------------------------------------------------------------ */
+
+.scada-overlay h2,
+.scada-overlay h3,
+.scada-faceplate h2,
+.scada-faceplate h3,
+.twin-hud h2,
+.twin-hud h3 {
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  overflow-wrap: anywhere !important;
+}
+
+
+/* ------------------------------------------------------------
+   Buttons stay inside SCADA card
+   ------------------------------------------------------------ */
+
+.scada-overlay .button-row,
+.scada-faceplate .button-row,
+.twin-hud .button-row {
+  display: grid !important;
+
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(72px, 1fr)
+    ) !important;
+
+  gap: 7px !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.scada-overlay button,
+.scada-faceplate button,
+.twin-hud button {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+
+/* ------------------------------------------------------------
+   Narrow production column protection
+   ------------------------------------------------------------ */
+
+@media (max-width: 1400px) {
+
+  .scada-overlay header,
+  .scada-faceplate header,
+  .scada-overlay-heading,
+  .scada-faceplate-heading,
+  .twin-scada-heading {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(82px, 0.40fr) !important;
+  }
+
+  .scada-status,
+  .scada-state,
+  .scada-status-pill,
+  .scada-state-pill,
+  .twin-scada-status,
+  .twin-scada-state {
+    font-size:
+      clamp(
+        0.48rem,
+        0.54vw,
+        0.61rem
+      ) !important;
+  }
+}
